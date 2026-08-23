@@ -1,0 +1,6 @@
+{
+    "idf.currentSetup": "/home/dyh/.espressif/v6.0.2/esp-idf",
+    "idf.openOcdConfigs": [
+        "board/esp32c3-builtin.cfg"
+    ]
+}

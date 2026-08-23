@@ -1,0 +1,34 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "app_model.c"
+        "board_backlight.c"
+        "board_button.c"
+        "board_display.c"
+        "board_touch.c"
+        "config_store.c"
+        "diagnostics.c"
+        "ui_runtime.c"
+        "ui_shell.c"
+        "ui_control_center.c"
+        "network_manager.c"
+        "provisioning_portal.c"
+        "time_service.c"
+        "backend_probe.c"
+        "fonts/font_cn_16.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        app_update
+        driver
+        esp_event
+        esp_http_client
+        esp_http_server
+        esp_lcd
+        esp_driver_ledc
+        esp_netif
+        esp_wifi
+        lwip
+        nvs_flash
+        spi_flash
+        lvgl
+)
