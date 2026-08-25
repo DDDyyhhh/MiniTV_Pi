@@ -56,7 +56,10 @@ void app_main(void)
 
     if (configured) {
         app_model_set_status("Saved Wi-Fi configuration found");
-        ESP_ERROR_CHECK(network_manager_connect(&config));
+        const esp_err_t connect_result = network_manager_connect(&config);
+        if (connect_result != ESP_OK) {
+            ESP_LOGE(TAG, "saved Wi-Fi connection start failed: %s", esp_err_to_name(connect_result));
+        }
     } else {
         app_model_set_status("No Wi-Fi configuration; opening portal");
         network_manager_start_provisioning();

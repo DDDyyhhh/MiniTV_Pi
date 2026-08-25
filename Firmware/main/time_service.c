@@ -1,5 +1,8 @@
 #include "time_service.h"
 
+#include <stdlib.h>
+#include <time.h>
+
 #include "esp_log.h"
 #include "esp_netif_sntp.h"
 #include "freertos/FreeRTOS.h"
@@ -23,6 +26,8 @@ static void sync_task(void *argument)
 
 void time_service_start(void)
 {
+    setenv("TZ", "CST-8", 1);
+    tzset();
     if (!s_started) {
         const esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
         if (esp_netif_sntp_init(&config) != ESP_OK) {

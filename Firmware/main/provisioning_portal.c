@@ -70,6 +70,7 @@ static esp_err_t root_handler(httpd_req_t *request)
         "<label>Wi-Fi password <input name=password type=password maxlength=64></label><br>"
         "<label>HA endpoint <input name=endpoint maxlength=127 placeholder=https://ha.lan:8123></label><br>"
         "<label>HA token <input name=token type=password maxlength=255></label><br>"
+        "<label>Weather entity <input name=weather maxlength=63 placeholder=weather.home></label><br>"
         "<button>Save and connect</button></form></body></html>";
     httpd_resp_set_type(request, "text/html; charset=utf-8");
     return httpd_resp_send(request, page, HTTPD_RESP_USE_STRLEN);
@@ -95,6 +96,7 @@ static esp_err_t save_handler(httpd_req_t *request)
     (void)decode_form_value(body, "password", config.wifi_password, sizeof(config.wifi_password));
     (void)decode_form_value(body, "endpoint", config.ha_endpoint, sizeof(config.ha_endpoint));
     (void)decode_form_value(body, "token", config.ha_token, sizeof(config.ha_token));
+    (void)decode_form_value(body, "weather", config.weather_entity, sizeof(config.weather_entity));
     config.brightness_percent = 55;
     if ((config.wifi_ssid[0] == '\0') || !config_store_endpoint_is_valid(config.ha_endpoint)) {
         httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "SSID or endpoint is invalid");

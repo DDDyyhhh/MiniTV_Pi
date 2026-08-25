@@ -11,9 +11,11 @@ ESP32-C3 Mini TV 真机运行完整固件:左右滑动三张 Apple Fluent 卡片
 
 ## Notes
 
+- **工单 09 已 resolved**: Skeleton Milestone 真机验收闭环；三张 `lv_tileview` Card、45px 顶部 Control Center 手势、240×40 行 DMA 双缓冲、Wi-Fi/SoftAP Provisioning Portal 均已达成。SPI 稳定发布基线锁定 10MHz；20MHz 在 SoftAP 场景复现 `lvgl` Task WDT，已按回退规则弃用。
+- **当前 PCB 无 ST7789 TE 信号**，不纳入工单 09。
 - **本努力携带实现**:目的地是真机全实现,故 09–12 为执行型 `task` 工单——这是对 wayfinder「只规划不实现」默认的显式覆盖。规划工单(01–08)仍按「决定而非交付」推进。
 - **硬件权威事实**(见 `Firmware/docs/hardware/HADRWARE.md`,规划与实现工单一律以它为准,不靠猜测):
-  - MCU:ESP32-C3-12F,4MB flash(⚠️ sdkconfig 现误设 `CONFIG_ESPTOOLPY_FLASHSIZE_2MB`,需改为 4MB);无 PSRAM,LVGL 用局部缓冲,内存预算 ~300KB。
+  - MCU:ESP32-C3-12F,4MB flash; sdkconfig 与分区表已修正为 4MB;无 PSRAM,LVGL 用局部缓冲,内存预算 ~300KB。
   - 屏:ST7789 240x320 SPI,SCLK=GPIO4 / MOSI=GPIO6 / DC=GPIO7 / RST=GPIO8 / CS=GPIO10 / BLK=GPIO5(PWM 可调背光);须用 `esp_lcd` + DMA。
   - 触摸:CST816D 电容触摸,I2C SDA=GPIO2 / SCL=GPIO3(板载 4.7K 上拉),INT=GPIO0 / RST=GPIO1;须用新版 `driver/i2c_master.h` API。
   - 输入:BOOT 键 GPIO9(低有效)作为辅助输入。
@@ -33,10 +35,11 @@ ESP32-C3 Mini TV 真机运行完整固件:左右滑动三张 Apple Fluent 卡片
 - [ESP32↔HA 对接规范调研](issues/04-ha-api.md) — MVP 采用 REST-only 的白名单单实体读取与显式服务调用;专用 `ha_io_task`、HTTPS+LLAT、NVS encryption 和确认读取;WebSocket 仅在真机评估后按实体追加。
 - [UI 技术栈与视觉系统定案](issues/01-ui-stack.md) — 采用 LVGL 8.3.11 + `esp_lcd` ST7789 局部 DMA 双缓冲 + `lv_tileview`;视觉为深色 Frosted Panel 风格(无实时 blur);中文 300-500 字子集以 C 数组静态编译,50 KiB 内为目标。
 - [Home Assistant 安装主机方案](issues/02-ha-host.md) — 首版 HA 装在现有 Linux 主机上的 Home Assistant Container(host network),不是 24 小时常开中枢;电脑关机时 ESP32 显示 HA 离线,卡片2用同一 Linux 主机的本机 agent 做性能采集和快捷启动。
-- [骨架里程碑验收标准](issues/05-skeleton-acceptance.md) — 工单 09 的完成定义锁定为真机点亮 ST7789、CST816D 触摸/手势、三卡片壳、首版 Control Center、SoftAP 配网、NTP、HA 离线态、4MB flash 修正和 heap/FPS/稳定性基线;控制中心首版不做二级页。
-- [卡片1 数据源与呈现](issues/06-card1-data.md) — Time Card 采用本地 SNTP 时间 + HA `weather.get_forecasts` 24h 天气 + ESP32 内置 2026-2027 中国节假日表;天气缓存小于 24h 显示 Stale Data,节假日离线可用,折线首版自绘轻量实现。
+- [骨架里程碑验收标准](issues/05-skeleton-acceptance.md) — 工单 09 的完成定义锁定为真机点亮 ST7789、CST816D 触摸/手势、三卡片壳、首版 Control Center、SoftAP 配网、NTP、HA 离线态、4MB flash 修正和 heap/FPS/稳定性基线;控制中心首版不做二级页。工单 09 已按验收记录闭环并标记 resolved。
+- [卡片1 数据源与呈现](issues/06-card1-data.md) — Time Card 采用本地 SNTP 时间 + HA `weather.get_forecasts` 24h 天气 + ESP32 内置 2026-2027 中国节假日表;天气缓存小于 24h 显示 Stale Data,节假日离线可用；当前实现使用 LVGL `lv_chart` 双曲线与中间点插值。
 - [卡片2 电脑性能副屏方案](issues/07-card2-pc.md) — Ubuntu GNOME/X11 + GTX 1660 SUPER 使用 `systemd --user` Python agent:5 秒采集 psutil/NVIDIA 指标到 HA,固定 allowlist action 经 HA event 打开 Chrome 的抖音/B站或空白 VSCode;ESP32 10 秒 REST 读取并按 request ID 确认启动结果。
 - [卡片3 米家灯光拟态开关方案](issues/08-card3-lights.md) — Smart Home Card 首版是客厅两路+卧室两路的 2×2 Entity Tile,仅轻触明确开/关;HA 实体必须逐个验证并映射,服务后立即/1s/3s 回读确认,HA 离线时禁用全部控制。
+- **工单 10 已实现第一版并保持 open**: Time Card 三个子页面、NTP 时钟、24 小时 `lv_chart` 温度/降水趋势、日历与节假日倒数、HA hourly forecast、NVS Stale Data 缓存均已接入；HA 实体与 hourly REST 契约已在宿主机验证。重新配网后的天气任务已运行，但 ESP32 到 HA Host `192.168.10.55:8123` 的 TCP 连接超时；待该网络路径打通并重启捕获 IP/SNTP 后完成真机数据链路验收。
 
 ## Not yet specified
 

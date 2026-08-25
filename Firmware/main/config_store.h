@@ -9,12 +9,14 @@
 #define CONFIG_PASSWORD_MAX_LEN 64
 #define CONFIG_ENDPOINT_MAX_LEN 127
 #define CONFIG_TOKEN_MAX_LEN 255
+#define CONFIG_WEATHER_ENTITY_MAX_LEN 63
 
 typedef struct {
     char wifi_ssid[CONFIG_SSID_MAX_LEN + 1];
     char wifi_password[CONFIG_PASSWORD_MAX_LEN + 1];
     char ha_endpoint[CONFIG_ENDPOINT_MAX_LEN + 1];
     char ha_token[CONFIG_TOKEN_MAX_LEN + 1];
+    char weather_entity[CONFIG_WEATHER_ENTITY_MAX_LEN + 1];
     uint8_t brightness_percent;
 } app_config_t;
 

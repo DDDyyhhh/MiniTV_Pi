@@ -11,12 +11,25 @@
 
 #define NVS_NAMESPACE "minitv"
 #define NVS_KEY_CONFIG "config"
-#define CONFIG_VERSION 1U
+#define CONFIG_VERSION 2U
+
+typedef struct {
+    char wifi_ssid[CONFIG_SSID_MAX_LEN + 1];
+    char wifi_password[CONFIG_PASSWORD_MAX_LEN + 1];
+    char ha_endpoint[CONFIG_ENDPOINT_MAX_LEN + 1];
+    char ha_token[CONFIG_TOKEN_MAX_LEN + 1];
+    uint8_t brightness_percent;
+} legacy_app_config_t;
 
 typedef struct {
     uint32_t version;
     app_config_t data;
 } persisted_config_t;
+
+typedef struct {
+    uint32_t version;
+    legacy_app_config_t data;
+} legacy_persisted_config_t;
 
 esp_err_t config_store_init(void)
 {
@@ -39,17 +52,29 @@ bool config_store_load(app_config_t *out_config)
     }
     persisted_config_t stored = {0};
     size_t size = sizeof(stored);
-    const esp_err_t result = nvs_get_blob(handle, NVS_KEY_CONFIG, &stored, &size);
-    nvs_close(handle);
-    if ((result != ESP_OK) || (size != sizeof(stored)) || (stored.version != CONFIG_VERSION) ||
-        (stored.data.wifi_ssid[0] == '\0')) {
-        return false;
+    esp_err_t result = nvs_get_blob(handle, NVS_KEY_CONFIG, &stored, &size);
+    if ((result == ESP_OK) && (size == sizeof(stored)) && (stored.version == CONFIG_VERSION)) {
+        nvs_close(handle);
+        if (stored.data.wifi_ssid[0] == '\0') return false;
+        stored.data.wifi_ssid[CONFIG_SSID_MAX_LEN] = '\0';
+        stored.data.wifi_password[CONFIG_PASSWORD_MAX_LEN] = '\0';
+        stored.data.ha_endpoint[CONFIG_ENDPOINT_MAX_LEN] = '\0';
+        stored.data.ha_token[CONFIG_TOKEN_MAX_LEN] = '\0';
+        stored.data.weather_entity[CONFIG_WEATHER_ENTITY_MAX_LEN] = '\0';
+        *out_config = stored.data;
+        return true;
     }
-    stored.data.wifi_ssid[CONFIG_SSID_MAX_LEN] = '\0';
-    stored.data.wifi_password[CONFIG_PASSWORD_MAX_LEN] = '\0';
-    stored.data.ha_endpoint[CONFIG_ENDPOINT_MAX_LEN] = '\0';
-    stored.data.ha_token[CONFIG_TOKEN_MAX_LEN] = '\0';
-    *out_config = stored.data;
+    legacy_persisted_config_t legacy = {0};
+    size = sizeof(legacy);
+    result = nvs_get_blob(handle, NVS_KEY_CONFIG, &legacy, &size);
+    nvs_close(handle);
+    if ((result != ESP_OK) || (size != sizeof(legacy)) || (legacy.version != 1U) || (legacy.data.wifi_ssid[0] == '\0')) return false;
+    memset(out_config, 0, sizeof(*out_config));
+    memcpy(out_config->wifi_ssid, legacy.data.wifi_ssid, sizeof(out_config->wifi_ssid));
+    memcpy(out_config->wifi_password, legacy.data.wifi_password, sizeof(out_config->wifi_password));
+    memcpy(out_config->ha_endpoint, legacy.data.ha_endpoint, sizeof(out_config->ha_endpoint));
+    memcpy(out_config->ha_token, legacy.data.ha_token, sizeof(out_config->ha_token));
+    out_config->brightness_percent = legacy.data.brightness_percent;
     return true;
 }
 

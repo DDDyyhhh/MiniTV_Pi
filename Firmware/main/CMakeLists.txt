@@ -15,6 +15,7 @@ idf_component_register(
         "provisioning_portal.c"
         "time_service.c"
         "backend_probe.c"
+        "card1.c"
         "fonts/font_cn_16.c"
     INCLUDE_DIRS "."
     REQUIRES

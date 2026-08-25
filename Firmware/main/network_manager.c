@@ -22,6 +22,7 @@
 #include "app_model.h"
 #include "esp_check.h"
 #include "backend_probe.h"
+#include "card1.h"
 #include "esp_check.h"
 #include "provisioning_portal.h"
 #include "esp_check.h"
@@ -46,11 +47,9 @@ static void wifi_event_handler(void *argument, esp_event_base_t event_base, int3
     (void)argument;
     (void)event_base;
     (void)event_data;
-    if (event_id == WIFI_EVENT_STA_START) {
-        (void)esp_wifi_connect();
-        return;
-    }
     if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        const wifi_event_sta_disconnected_t *disconnected = event_data;
+        ESP_LOGW(TAG, "STA disconnected: reason=%d retry=%u", disconnected != NULL ? disconnected->reason : -1, s_retry_count);
         if (s_retry_count < 5U) {
             s_retry_count++;
             app_model_set_wifi(APP_WIFI_CONNECTING, NULL, NULL, -127);
@@ -81,6 +80,7 @@ static void ip_event_handler(void *argument, esp_event_base_t event_base, int32_
     s_retry_count = 0;
     time_service_start();
     backend_probe_request_now();
+    card1_start();
     refresh_ui();
 }
 
@@ -117,7 +117,12 @@ esp_err_t network_manager_connect(const app_config_t *config)
     app_model_set_wifi(APP_WIFI_CONNECTING, config->wifi_ssid, NULL, -127);
     app_model_set_backend(config->ha_endpoint[0] == '\0' ? APP_BACKEND_UNCONFIGURED : APP_BACKEND_PROBING, config->ha_endpoint);
     refresh_ui();
-    return esp_wifi_connect();
+    const esp_err_t result = esp_wifi_connect();
+    if (result != ESP_OK) {
+        app_model_set_wifi(APP_WIFI_FAILED, config->wifi_ssid, NULL, -127);
+        refresh_ui();
+    }
+    return result;
 }
 
 void network_manager_start_provisioning(void)

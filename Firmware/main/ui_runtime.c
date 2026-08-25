@@ -108,8 +108,6 @@ esp_err_t ui_runtime_init(void)
     }
     lv_disp_draw_buf_init(&s_draw_buffer, s_buffer_1, s_buffer_2, buffer_pixels);
 
-    /* LVGL keeps pointers to both registered driver structures. They must have
-     * static lifetime and cannot be stack locals in this initializer. */
     lv_disp_drv_init(&s_display_driver);
     s_display_driver.hor_res = BOARD_LCD_H_RES;
     s_display_driver.ver_res = BOARD_LCD_V_RES;
