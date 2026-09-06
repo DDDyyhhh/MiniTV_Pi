@@ -23,6 +23,7 @@
 #include "esp_check.h"
 #include "backend_probe.h"
 #include "card1.h"
+#include "pc_monitor.h"
 #include "esp_check.h"
 #include "provisioning_portal.h"
 #include "esp_check.h"
@@ -81,6 +82,7 @@ static void ip_event_handler(void *argument, esp_event_base_t event_base, int32_
     time_service_start();
     backend_probe_request_now();
     card1_start();
+    pc_monitor_start();
     refresh_ui();
 }
 

@@ -7,7 +7,7 @@
 
 ## 2. PCB GPIO 引脚映射表 (Pinout Table)
 
-### 屏幕接口 (ST7789 240x320 SPI 彩屏)
+- **显示逻辑方向**: 横屏 `320×240`；ST7789 原生矩阵为 `240×320`，固件启用轴交换与 X 轴镜像；CST816D 坐标同步转换。
 - `LCD_SCLK` (SPI 时钟): GPIO 4
 - `LCD_MOSI` (SPI 数据): GPIO 6
 - `LCD_DC`   (数据/命令): GPIO 7

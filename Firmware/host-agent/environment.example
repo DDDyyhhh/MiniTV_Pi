@@ -1,0 +1,5 @@
+# Copy to ~/.config/minitv-pc-agent/environment and chmod 600.
+# Obtain a dedicated Home Assistant long-lived access token; never reuse the ESP32 token.
+MINITV_HA_URL=http://127.0.0.1:8123
+MINITV_HA_TOKEN=REPLACE_WITH_DEDICATED_PC_AGENT_LLAT
+MINITV_PC_AGENT_LOG_LEVEL=INFO

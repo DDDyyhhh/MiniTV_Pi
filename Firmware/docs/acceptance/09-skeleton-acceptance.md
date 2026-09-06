@@ -26,7 +26,17 @@
 
 ## 关键串口证据
 
-10 MHz 稳定基线启动：
+横屏固件串口证据：
+
+```text
+ST7789V ready: 320x240, BGR RGB565, SPI 10000000 Hz, black clear complete
+LVGL 8.3.11 registered: DMA double buffer 40 lines, 51200 bytes
+baseline: [shell-ready] ... buffer_lines=40 buffer_bytes=51200
+baseline: [periodic] ... fps=51 buffer_lines=40 buffer_bytes=51200
+Task WDT=0, abort=0, lwIP assertion=0
+```
+
+原 240×320 竖屏启动证据仍保留在下方历史记录中。
 
 ```text
 ST7789V ready: 240x320, BGR RGB565, SPI 10000000 Hz, black clear complete

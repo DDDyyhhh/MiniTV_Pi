@@ -28,6 +28,7 @@ static int64_t s_last_fps_us;
 static bool s_started;
 static TaskHandle_t s_ui_task_handle;
 static volatile bool s_toggle_control_center;
+static volatile bool s_refresh_requested;
 
 static void display_wait(lv_disp_drv_t *display_driver)
 {
@@ -68,26 +69,35 @@ static void ui_task(void *argument)
 {
     (void)argument;
     s_ui_task_handle = xTaskGetCurrentTaskHandle();
+    s_refresh_requested = true;
     s_last_fps_us = esp_timer_get_time();
+    int64_t last_model_refresh_us = 0;
     while (true) {
-        if (xSemaphoreTake(s_lvgl_lock, portMAX_DELAY) == pdTRUE) {
+        const bool was_notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20)) > 0;
+        const int64_t now = esp_timer_get_time();
+        const bool refresh_model = was_notified || s_refresh_requested ||
+                                   ((now - last_model_refresh_us) >= 1000000);
+        if (xSemaphoreTake(s_lvgl_lock, pdMS_TO_TICKS(20)) == pdTRUE) {
             if (s_toggle_control_center) {
                 s_toggle_control_center = false;
                 ESP_LOGI(TAG, "[DEBUG-button] applying Control Center toggle");
                 ui_control_center_toggle();
             }
-            ui_shell_refresh();
+            if (refresh_model) {
+                s_refresh_requested = false;
+                last_model_refresh_us = now;
+                ui_shell_refresh();
+            }
             (void)lv_timer_handler();
             xSemaphoreGive(s_lvgl_lock);
         }
         s_flushes++;
-        const int64_t now = esp_timer_get_time();
         if ((now - s_last_fps_us) >= 1000000) {
             s_fps = (uint16_t)s_flushes;
             s_flushes = 0;
             s_last_fps_us = now;
         }
-        vTaskDelay(pdMS_TO_TICKS(5));
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
 
@@ -148,6 +158,7 @@ esp_err_t ui_runtime_start(void)
 
 void ui_runtime_request_refresh(void)
 {
+    s_refresh_requested = true;
     if (s_ui_task_handle != NULL) {
         xTaskNotifyGive(s_ui_task_handle);
     }

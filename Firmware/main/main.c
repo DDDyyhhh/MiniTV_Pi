@@ -19,6 +19,13 @@
 #include "ui_shell.h"
 #include "ui_runtime.h"
 
+#if __has_include("local_credentials.h")
+#include "local_credentials.h"
+#define MINITV_HAS_LOCAL_CREDENTIALS 1
+#else
+#define MINITV_HAS_LOCAL_CREDENTIALS 0
+#endif
+
 static const char *TAG = "minitv";
 
 static void diagnostics_task(void *argument)
@@ -41,7 +48,16 @@ void app_main(void)
     ESP_ERROR_CHECK(config_store_init());
     app_model_init();
     app_config_t config = {0};
-    const bool configured = config_store_load(&config);
+    bool configured = config_store_load(&config);
+#if MINITV_HAS_LOCAL_CREDENTIALS
+    const app_config_t local_config = minitv_local_config;
+    if (local_config.wifi_ssid[0] != '\0') {
+        ESP_ERROR_CHECK(config_store_save(&local_config));
+        config = local_config;
+        configured = true;
+        ESP_LOGI(TAG, "Local credentials applied to NVS");
+    }
+#endif
     const uint8_t brightness = (configured && (config.brightness_percent >= 10U)) ? config.brightness_percent : 55U;
     app_model_set_brightness(brightness);
 

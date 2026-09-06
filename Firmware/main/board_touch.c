@@ -51,10 +51,13 @@ static void touch_task(void *argument)
         if (read_register(FT6336U_REG_P1_X_HIGH, data, sizeof(data)) != ESP_OK) {
             continue;
         }
-        const uint16_t x = (uint16_t)(((data[0] & 0x0FU) << 8U) | data[1]);
-        const uint16_t y = (uint16_t)(((data[2] & 0x0FU) << 8U) | data[3]);
-        s_sample.x = x < BOARD_LCD_H_RES ? x : BOARD_LCD_H_RES - 1U;
-        s_sample.y = y < BOARD_LCD_V_RES ? y : BOARD_LCD_V_RES - 1U;
+        const uint16_t raw_x = (uint16_t)(((data[0] & 0x0FU) << 8U) | data[1]);
+        const uint16_t raw_y = (uint16_t)(((data[2] & 0x0FU) << 8U) | data[3]);
+        const uint16_t native_x = raw_x < BOARD_LCD_NATIVE_H_RES ? raw_x : BOARD_LCD_NATIVE_H_RES - 1U;
+        const uint16_t native_y = raw_y < BOARD_LCD_NATIVE_V_RES ? raw_y : BOARD_LCD_NATIVE_V_RES - 1U;
+        /* Map native touch axes so physical right/down movement follows content. */
+        s_sample.x = native_y;
+        s_sample.y = BOARD_LCD_NATIVE_H_RES - 1U - native_x;
         s_sample.pressed = true;
     }
 }

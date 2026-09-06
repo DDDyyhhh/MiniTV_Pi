@@ -1,3 +1,11 @@
+# local_credentials.h is intentionally ignored by Git. Track its presence so
+# Ninja reconfigures when a developer creates or removes the local override.
+set(local_credentials "${CMAKE_CURRENT_SOURCE_DIR}/local_credentials.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${local_credentials}")
+if(EXISTS "${local_credentials}")
+    set_property(SOURCE "main.c" APPEND PROPERTY OBJECT_DEPENDS "${local_credentials}")
+endif()
+
 idf_component_register(
     SRCS
         "main.c"
@@ -16,6 +24,7 @@ idf_component_register(
         "time_service.c"
         "backend_probe.c"
         "card1.c"
+        "pc_monitor.c"
         "fonts/font_cn_16.c"
     INCLUDE_DIRS "."
     REQUIRES

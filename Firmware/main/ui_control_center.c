@@ -1,6 +1,7 @@
 #include "ui_control_center.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "lvgl.h"
 
@@ -8,6 +9,7 @@
 #include "board_backlight.h"
 #include "config_store.h"
 #include "provisioning_portal.h"
+#include "board_pins.h"
 #include "ui_fonts.h"
 #include "ui_runtime.h"
 
@@ -31,6 +33,13 @@ static const char *wifi_text(app_wifi_state_t state)
     case APP_WIFI_PROVISIONING: return "Provisioning portal";
     case APP_WIFI_FAILED: return "Wi-Fi failed";
     default: return "Wi-Fi not configured";
+    }
+}
+
+static void set_label_text_if_changed(lv_obj_t *label, const char *text)
+{
+    if ((label != NULL) && (text != NULL) && (strcmp(lv_label_get_text(label), text) != 0)) {
+        lv_label_set_text(label, text);
     }
 }
 
@@ -85,7 +94,7 @@ void ui_control_center_create(void)
     lv_obj_add_flag(s_scrim, LV_OBJ_FLAG_HIDDEN);
 
     s_panel = lv_obj_create(s_scrim);
-    lv_obj_set_size(s_panel, 232, 208);
+    lv_obj_set_size(s_panel, BOARD_LCD_H_RES - 24, 156);
     lv_obj_align(s_panel, LV_ALIGN_TOP_MID, 0, 8);
     lv_obj_set_style_bg_color(s_panel, COLOR_PANEL, 0);
     lv_obj_set_style_border_color(s_panel, COLOR_BORDER, 0);
@@ -101,8 +110,8 @@ void ui_control_center_create(void)
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 0, 0);
 
     s_brightness = lv_slider_create(s_panel);
-    lv_obj_set_width(s_brightness, 194);
-    lv_obj_align(s_brightness, LV_ALIGN_TOP_LEFT, 0, 40);
+    lv_obj_set_width(s_brightness, 128);
+    lv_obj_align(s_brightness, LV_ALIGN_TOP_LEFT, 0, 34);
     lv_slider_set_range(s_brightness, 10, 100);
     lv_obj_set_style_bg_color(s_brightness, COLOR_ACCENT, LV_PART_INDICATOR);
     lv_obj_add_event_cb(s_brightness, brightness_changed, LV_EVENT_VALUE_CHANGED, NULL);
@@ -110,21 +119,21 @@ void ui_control_center_create(void)
 
     s_network = lv_label_create(s_panel);
     lv_obj_set_style_text_color(s_network, COLOR_SECONDARY, 0);
-    lv_obj_set_style_text_font(s_network, UI_FONT_BODY, 0);
-    lv_obj_set_width(s_network, 200);
+    lv_obj_set_style_text_font(s_network, &lv_font_montserrat_12, 0);
+    lv_obj_set_width(s_network, 140);
     lv_label_set_long_mode(s_network, LV_LABEL_LONG_WRAP);
-    lv_obj_align(s_network, LV_ALIGN_TOP_LEFT, 0, 76);
+    lv_obj_align(s_network, LV_ALIGN_TOP_LEFT, 0, 66);
 
     s_backend = lv_label_create(s_panel);
     lv_obj_set_style_text_color(s_backend, COLOR_SECONDARY, 0);
-    lv_obj_set_style_text_font(s_backend, UI_FONT_BODY, 0);
-    lv_obj_set_width(s_backend, 200);
+    lv_obj_set_style_text_font(s_backend, &lv_font_montserrat_12, 0);
+    lv_obj_set_width(s_backend, 124);
     lv_label_set_long_mode(s_backend, LV_LABEL_LONG_WRAP);
-    lv_obj_align(s_backend, LV_ALIGN_TOP_LEFT, 0, 120);
+    lv_obj_align(s_backend, LV_ALIGN_TOP_RIGHT, 0, 34);
 
     lv_obj_t *button = lv_btn_create(s_panel);
-    lv_obj_set_size(button, 120, 36);
-    lv_obj_align(button, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_set_size(button, 110, 34);
+    lv_obj_align(button, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
     lv_obj_set_style_bg_color(button, COLOR_ACCENT, 0);
     lv_obj_add_event_cb(button, reprovision_clicked, LV_EVENT_CLICKED, NULL);
     lv_obj_t *label = lv_label_create(button);
@@ -168,8 +177,8 @@ void ui_control_center_refresh(void)
     char line[96];
     (void)snprintf(line, sizeof(line), "%s\n%s  %s  RSSI %d", wifi_text(model.wifi_state),
                    model.ssid[0] != '\0' ? model.ssid : "-", model.ip[0] != '\0' ? model.ip : "-", model.rssi);
-    lv_label_set_text(s_network, line);
+    set_label_text_if_changed(s_network, line);
     (void)snprintf(line, sizeof(line), "%s", backend_text(model.backend_state));
-    lv_label_set_text(s_backend, line);
+    set_label_text_if_changed(s_backend, line);
     lv_slider_set_value(s_brightness, model.brightness_percent, LV_ANIM_OFF);
 }

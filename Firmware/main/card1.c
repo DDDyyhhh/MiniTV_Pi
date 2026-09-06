@@ -14,6 +14,7 @@
 #include "nvs.h"
 
 #include "app_model.h"
+#include "board_pins.h"
 #include "config_store.h"
 #include "ui_runtime.h"
 
@@ -22,6 +23,7 @@
 #define CARD1_CHART_POINTS 47
 #define CARD1_WEATHER_REFRESH_SECONDS (30 * 60)
 #define CARD1_CACHE_MAX_AGE_SECONDS (24 * 60 * 60)
+#define CARD1_MIN_VALID_EPOCH ((time_t)1704067200)
 #define CARD1_NVS_NAMESPACE "minitv"
 #define CARD1_NVS_CACHE_KEY "weather"
 #define CARD1_CACHE_VERSION 1U
@@ -49,8 +51,16 @@ static SemaphoreHandle_t s_weather_lock;
 static card1_weather_snapshot_t s_weather;
 static uint32_t s_weather_revision;
 static uint32_t s_rendered_weather_revision;
+static bool s_cache_age_pending;
 static uint8_t s_last_minute = 255;
 static int s_last_calendar_day = -1;
+
+static void set_label_text_if_changed(lv_obj_t *label, const char *text)
+{
+    if ((label != NULL) && (text != NULL) && (strcmp(lv_label_get_text(label), text) != 0)) {
+        lv_label_set_text(label, text);
+    }
+}
 
 typedef struct {
     uint32_t version;
@@ -83,6 +93,23 @@ static void set_weather(const card1_weather_snapshot_t *snapshot)
     xSemaphoreGive(s_weather_lock);
 }
 
+static bool weather_snapshot_shape_is_valid(const card1_weather_snapshot_t *snapshot)
+{
+    return (snapshot != NULL) && snapshot->valid && (snapshot->point_count == CARD1_FORECAST_POINTS) &&
+           (snapshot->fetched_at >= CARD1_MIN_VALID_EPOCH);
+}
+
+static bool weather_snapshot_is_fresh(const card1_weather_snapshot_t *snapshot, time_t now)
+{
+    return weather_snapshot_shape_is_valid(snapshot) && (now >= snapshot->fetched_at) &&
+           ((now - snapshot->fetched_at) < CARD1_CACHE_MAX_AGE_SECONDS);
+}
+
+static bool system_time_is_valid(void)
+{
+    return time(NULL) >= CARD1_MIN_VALID_EPOCH;
+}
+
 static void load_weather_cache(void)
 {
     nvs_handle_t handle;
@@ -91,22 +118,52 @@ static void load_weather_cache(void)
     size_t size = sizeof(cache);
     const esp_err_t result = nvs_get_blob(handle, CARD1_NVS_CACHE_KEY, &cache, &size);
     nvs_close(handle);
-    if ((result == ESP_OK) && (size == sizeof(cache)) && (cache.version == CARD1_CACHE_VERSION) && cache.snapshot.valid) {
-        const time_t age = time(NULL) - cache.snapshot.fetched_at;
-        if ((age >= 0) && (age < CARD1_CACHE_MAX_AGE_SECONDS)) {
-            set_weather(&cache.snapshot);
-        }
+    if ((result != ESP_OK) || (size != sizeof(cache)) || (cache.version != CARD1_CACHE_VERSION) ||
+        !weather_snapshot_shape_is_valid(&cache.snapshot)) {
+        return;
+    }
+    app_model_t model;
+    app_model_get(&model);
+    cache.snapshot.stale = true;
+    if (!model.time_synced) {
+        set_weather(&cache.snapshot);
+        s_cache_age_pending = true;
+        ESP_LOGI(TAG, "Weather cache loaded; waiting for SNTP age validation");
+    } else if (weather_snapshot_is_fresh(&cache.snapshot, time(NULL))) {
+        set_weather(&cache.snapshot);
     }
 }
 
 static void save_weather_cache(const card1_weather_snapshot_t *snapshot)
 {
+    if (!weather_snapshot_shape_is_valid(snapshot)) {
+        ESP_LOGW(TAG, "Weather cache not saved; synchronized timestamp unavailable");
+        return;
+    }
     persisted_weather_cache_t cache = {.version = CARD1_CACHE_VERSION, .snapshot = *snapshot};
     nvs_handle_t handle;
     if (nvs_open(CARD1_NVS_NAMESPACE, NVS_READWRITE, &handle) == ESP_OK) {
         (void)nvs_set_blob(handle, CARD1_NVS_CACHE_KEY, &cache, sizeof(cache));
         (void)nvs_commit(handle);
         nvs_close(handle);
+    }
+}
+
+static void validate_loaded_cache(bool time_synced)
+{
+    if (!s_cache_age_pending || !time_synced) return;
+    const time_t now = time(NULL);
+    bool invalidated = false;
+    xSemaphoreTake(s_weather_lock, portMAX_DELAY);
+    if (s_weather.valid && !weather_snapshot_is_fresh(&s_weather, now)) {
+        memset(&s_weather, 0, sizeof(s_weather));
+        s_weather_revision++;
+        invalidated = true;
+    }
+    xSemaphoreGive(s_weather_lock);
+    s_cache_age_pending = false;
+    if (invalidated) {
+        ESP_LOGW(TAG, "Weather cache expired after SNTP validation");
     }
 }
 
@@ -137,8 +194,8 @@ static void subpage_changed(lv_event_t *event)
 static void draw_clock_page(lv_obj_t *page)
 {
     lv_obj_t *base = lv_obj_create(page);
-    lv_obj_set_size(base, 216, 188);
-    lv_obj_align(base, LV_ALIGN_TOP_MID, 0, 28);
+    lv_obj_set_size(base, 204, 166);
+    lv_obj_align(base, LV_ALIGN_LEFT_MID, 16, 10);
     style_panel(base);
     lv_obj_set_style_shadow_color(base, lv_color_black(), 0);
     lv_obj_set_style_shadow_width(base, 10, 0);
@@ -156,20 +213,22 @@ static void draw_clock_page(lv_obj_t *page)
     lv_obj_align(s_date, LV_ALIGN_CENTER, 0, 38);
 
     lv_obj_t *hint = lv_label_create(page);
-    lv_label_set_text(hint, "Swipe up: Weather  |  Calendar");
+    lv_label_set_text(hint, "Swipe down: next; up: back");
     lv_obj_set_style_text_color(hint, COLOR_SECONDARY, 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_12, 0);
-    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(hint, 84);
+    lv_obj_align(hint, LV_ALIGN_RIGHT_MID, -8, 0);
 }
 
 static void draw_weather_page(lv_obj_t *page)
 {
     s_weather_chart = lv_chart_create(page);
-    lv_obj_set_size(s_weather_chart, 220, 158);
-    lv_obj_align(s_weather_chart, LV_ALIGN_TOP_MID, 0, 38);
+    lv_obj_set_size(s_weather_chart, 296, 144);
+    lv_obj_align(s_weather_chart, LV_ALIGN_BOTTOM_MID, 0, -28);
     lv_chart_set_type(s_weather_chart, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(s_weather_chart, CARD1_CHART_POINTS);
-    lv_chart_set_div_line_count(s_weather_chart, 4, 4);
+    lv_chart_set_div_line_count(s_weather_chart, 4, 6);
     lv_obj_set_style_bg_color(s_weather_chart, COLOR_PANEL, 0);
     lv_obj_set_style_border_color(s_weather_chart, COLOR_BORDER, 0);
     lv_obj_set_style_line_color(s_weather_chart, COLOR_BORDER, LV_PART_MAIN);
@@ -187,19 +246,19 @@ static void draw_weather_page(lv_obj_t *page)
     lv_label_set_text(s_weather_extremes, "24h forecast  -- / --");
     lv_obj_set_style_text_color(s_weather_extremes, COLOR_PRIMARY, 0);
     lv_obj_set_style_text_font(s_weather_extremes, &lv_font_montserrat_12, 0);
-    lv_obj_align(s_weather_extremes, LV_ALIGN_TOP_LEFT, 8, 20);
+    lv_obj_align(s_weather_extremes, LV_ALIGN_TOP_LEFT, 12, 20);
     s_weather_state = lv_label_create(page);
     lv_label_set_text(s_weather_state, "Weather offline • 24h forecast");
     lv_obj_set_style_text_color(s_weather_state, COLOR_SECONDARY, 0);
     lv_obj_set_style_text_font(s_weather_state, &lv_font_montserrat_12, 0);
-    lv_obj_align(s_weather_state, LV_ALIGN_BOTTOM_LEFT, 8, -8);
+    lv_obj_align(s_weather_state, LV_ALIGN_BOTTOM_LEFT, 12, -8);
 }
 
 static void draw_calendar_page(lv_obj_t *page)
 {
     lv_obj_t *calendar = lv_obj_create(page);
-    lv_obj_set_size(calendar, 220, 168);
-    lv_obj_align(calendar, LV_ALIGN_TOP_MID, 0, 28);
+    lv_obj_set_size(calendar, 184, 176);
+    lv_obj_align(calendar, LV_ALIGN_LEFT_MID, 16, 8);
     style_panel(calendar);
     s_calendar_label = lv_label_create(calendar);
     lv_obj_set_style_text_color(s_calendar_label, COLOR_PRIMARY, 0);
@@ -207,14 +266,14 @@ static void draw_calendar_page(lv_obj_t *page)
     lv_obj_align(s_calendar_label, LV_ALIGN_TOP_LEFT, 0, 0);
 
     lv_obj_t *holiday = lv_obj_create(page);
-    lv_obj_set_size(holiday, 220, 72);
-    lv_obj_align(holiday, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_set_size(holiday, 96, 136);
+    lv_obj_align(holiday, LV_ALIGN_RIGHT_MID, -16, 8);
     style_panel(holiday);
     s_holiday_label = lv_label_create(holiday);
     lv_obj_set_style_text_color(s_holiday_label, COLOR_ACCENT, 0);
     lv_obj_set_style_text_font(s_holiday_label, &lv_font_montserrat_14, 0);
     lv_label_set_long_mode(s_holiday_label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(s_holiday_label, 196);
+    lv_obj_set_width(s_holiday_label, 72);
     lv_obj_align(s_holiday_label, LV_ALIGN_CENTER, 0, 0);
 }
 
@@ -228,8 +287,8 @@ static void animate_clock_flip(void *object, int32_t progress)
 static void update_clock(const app_model_t *model)
 {
     if (!model->time_synced) {
-        lv_label_set_text(s_clock, "--:--");
-        lv_label_set_text(s_date, "Not synced");
+        set_label_text_if_changed(s_clock, "--:--");
+        set_label_text_if_changed(s_date, "Not synced");
         return;
     }
     time_t now = time(NULL);
@@ -241,8 +300,8 @@ static void update_clock(const app_model_t *model)
     char date_text[40];
     (void)strftime(time_text, sizeof(time_text), "%H:%M", &local);
     (void)strftime(date_text, sizeof(date_text), "%a  %Y.%m.%d", &local);
-    lv_label_set_text(s_clock, time_text);
-    lv_label_set_text(s_date, date_text);
+    set_label_text_if_changed(s_clock, time_text);
+    set_label_text_if_changed(s_date, date_text);
     lv_obj_set_style_opa(s_clock, LV_OPA_30, 0);
     lv_obj_set_style_translate_y(s_clock, -8, 0);
     lv_anim_t animation;
@@ -264,8 +323,8 @@ static int days_in_month(int year, int month)
 static void update_calendar(const app_model_t *model)
 {
     if (!model->time_synced) {
-        lv_label_set_text(s_calendar_label, "Calendar waits for time sync");
-        lv_label_set_text(s_holiday_label, "Holiday countdown waits for time sync");
+        set_label_text_if_changed(s_calendar_label, "Calendar waits for time sync");
+        set_label_text_if_changed(s_holiday_label, "Holiday countdown waits for time sync");
         return;
     }
     time_t now = time(NULL);
@@ -282,7 +341,7 @@ static void update_calendar(const app_model_t *model)
         written += snprintf(calendar + written, sizeof(calendar) - written, "%2d%c", day, day == local.tm_mday ? '*' : ' ');
         if ((first.tm_wday + day) % 7 == 0) written += snprintf(calendar + written, sizeof(calendar) - written, "\n");
     }
-    lv_label_set_text(s_calendar_label, calendar);
+    set_label_text_if_changed(s_calendar_label, calendar);
 
     const holiday_t *next = NULL;
     int days_until = 0;
@@ -294,7 +353,7 @@ static void update_calendar(const app_model_t *model)
     char holiday_text[96];
     if (next == NULL) snprintf(holiday_text, sizeof(holiday_text), "Holiday table needs update");
     else snprintf(holiday_text, sizeof(holiday_text), "%s\n%d days remaining", next->name, days_until);
-    lv_label_set_text(s_holiday_label, holiday_text);
+    set_label_text_if_changed(s_holiday_label, holiday_text);
 }
 
 static bool extract_number(const char *object, const char *key, double *value)
@@ -385,18 +444,28 @@ static bool fetch_forecast(const app_config_t *config, card1_weather_snapshot_t 
     char request[160];
     snprintf(url, sizeof(url), "%s/api/services/weather/get_forecasts?return_response", config->ha_endpoint);
     snprintf(request, sizeof(request), "{\"type\":\"hourly\",\"entity_id\":\"%s\"}", config->weather_entity);
-    esp_http_client_config_t client_config = {.url = url, .method = HTTP_METHOD_POST, .timeout_ms = 5000, .buffer_size = 1024, .buffer_size_tx = 256};
+    esp_http_client_config_t client_config = {
+        .url = url,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 5000,
+        .buffer_size = 1024,
+        .buffer_size_tx = 1024,
+    };
     esp_http_client_handle_t client = esp_http_client_init(&client_config);
     if (client == NULL) return false;
     char authorization[CONFIG_TOKEN_MAX_LEN + 8] = "Bearer ";
     strncat(authorization, config->ha_token, sizeof(authorization) - strlen(authorization) - 1U);
     esp_http_client_set_header(client, "Authorization", authorization);
     esp_http_client_set_header(client, "Content-Type", "application/json");
-    esp_http_client_set_post_field(client, request, strlen(request));
+    const int request_len = (int)strlen(request);
     bool valid = false;
-    if ((esp_http_client_open(client, strlen(request)) == ESP_OK) && (esp_http_client_fetch_headers(client) >= 0) &&
-        (esp_http_client_get_status_code(client) >= 200) && (esp_http_client_get_status_code(client) < 300)) {
-        valid = read_forecast_stream(client, snapshot);
+    if (esp_http_client_open(client, request_len) == ESP_OK) {
+        if (esp_http_client_write(client, request, request_len) >= 0 &&
+            esp_http_client_fetch_headers(client) >= 0 &&
+            esp_http_client_get_status_code(client) >= 200 &&
+            esp_http_client_get_status_code(client) < 300) {
+            valid = read_forecast_stream(client, snapshot);
+        }
     }
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
@@ -407,6 +476,12 @@ static void weather_task(void *argument)
 {
     (void)argument;
     while (true) {
+        app_model_t model;
+        app_model_get(&model);
+        if (!model.time_synced && !system_time_is_valid()) {
+            (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+            continue;
+        }
         app_config_t config = {0};
         card1_weather_snapshot_t snapshot;
         if (config_store_load(&config) && (config.weather_entity[0] != '\0') && (config.ha_endpoint[0] != '\0') &&
@@ -416,12 +491,13 @@ static void weather_task(void *argument)
             ESP_LOGI(TAG, "Weather Trend updated: %u hourly points", snapshot.point_count);
             ui_runtime_request_refresh();
         } else {
+            const time_t now = time(NULL);
             xSemaphoreTake(s_weather_lock, portMAX_DELAY);
-            const time_t age = time(NULL) - s_weather.fetched_at;
-            if (s_weather.valid && (age >= 0) && (age < CARD1_CACHE_MAX_AGE_SECONDS)) {
+            if (weather_snapshot_is_fresh(&s_weather, now)) {
                 s_weather.stale = true;
-            } else {
+            } else if (s_weather.valid) {
                 s_weather.valid = false;
+                s_weather.stale = false;
             }
             s_weather_revision++;
             xSemaphoreGive(s_weather_lock);
@@ -446,8 +522,8 @@ static void update_weather_chart(void)
         lv_chart_set_all_value(s_weather_chart, s_temperature_series, LV_CHART_POINT_NONE);
         lv_chart_set_all_value(s_weather_chart, s_rain_series, LV_CHART_POINT_NONE);
         lv_chart_refresh(s_weather_chart);
-        lv_label_set_text(s_weather_extremes, "24h forecast  -- / --");
-        lv_label_set_text(s_weather_state, "Weather offline • no cached forecast");
+        set_label_text_if_changed(s_weather_extremes, "24h forecast  -- / --");
+        set_label_text_if_changed(s_weather_state, "Weather offline • no cached forecast");
         return;
     }
     int16_t low = snapshot.temperature_tenths[0], high = low;
@@ -457,8 +533,12 @@ static void update_weather_chart(void)
         if (snapshot.temperature_tenths[point] > high) high = snapshot.temperature_tenths[point];
         if (snapshot.precipitation_tenths[point] > rain_high) rain_high = snapshot.precipitation_tenths[point];
     }
-    low -= 20; high += 20;
-    if (high - low < 40) { low -= 20; high += 20; }
+    low -= 20;
+    high += 20;
+    if (high - low < 40) {
+        low -= 20;
+        high += 20;
+    }
     lv_chart_set_range(s_weather_chart, LV_CHART_AXIS_PRIMARY_Y, low, high);
     lv_chart_set_range(s_weather_chart, LV_CHART_AXIS_SECONDARY_Y, 0, rain_high + 10);
     for (uint8_t chart_point = 0; chart_point < CARD1_CHART_POINTS; chart_point++) {
@@ -483,10 +563,21 @@ static void update_weather_chart(void)
     lv_chart_refresh(s_weather_chart);
     char extremes[64];
     snprintf(extremes, sizeof(extremes), "24h  Low %.1f°  High %.1f°", low / 10.0 + 2.0, high / 10.0 - 2.0);
-    lv_label_set_text(s_weather_extremes, extremes);
+    set_label_text_if_changed(s_weather_extremes, extremes);
     char state[96];
     snprintf(state, sizeof(state), "%s  %u hourly points", snapshot.stale ? "Stale Data" : "Updated", snapshot.point_count);
-    lv_label_set_text(s_weather_state, state);
+    set_label_text_if_changed(s_weather_state, state);
+}
+
+void card1_refresh(void)
+{
+    if (s_clock == NULL) return;
+    app_model_t model;
+    app_model_get(&model);
+    validate_loaded_cache(model.time_synced);
+    update_clock(&model);
+    update_calendar(&model);
+    update_weather_chart();
 }
 
 esp_err_t card1_create(lv_obj_t *parent)
@@ -496,7 +587,7 @@ esp_err_t card1_create(lv_obj_t *parent)
     load_weather_cache();
     s_weather_revision++;
     s_subpages = lv_tileview_create(parent);
-    lv_obj_set_size(s_subpages, 240, 320);
+    lv_obj_set_size(s_subpages, BOARD_LCD_H_RES, BOARD_LCD_V_RES);
     lv_obj_align(s_subpages, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_scrollbar_mode(s_subpages, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_style_bg_color(s_subpages, COLOR_BG, 0);
@@ -514,22 +605,15 @@ esp_err_t card1_create(lv_obj_t *parent)
         lv_obj_set_style_bg_color(dot, index == 0 ? COLOR_ACCENT : COLOR_BORDER, 0);
         lv_obj_align(dot, LV_ALIGN_LEFT_MID, index * 24, 0);
     }
+    /* Keep Time Card pages in physical top-to-bottom order. */
     draw_clock_page(new_page(0, "Flip Clock"));
     draw_weather_page(new_page(1, "Weather Trend • 24h"));
     draw_calendar_page(new_page(2, "Calendar & Holiday"));
     lv_obj_add_event_cb(s_subpages, subpage_changed, LV_EVENT_VALUE_CHANGED, dots);
+    lv_obj_set_tile_id(s_subpages, 0, 0, LV_ANIM_OFF);
     return ESP_OK;
 }
 
-void card1_refresh(void)
-{
-    if (s_clock == NULL) return;
-    app_model_t model;
-    app_model_get(&model);
-    update_clock(&model);
-    update_calendar(&model);
-    update_weather_chart();
-}
 
 void card1_start(void)
 {

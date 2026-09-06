@@ -37,8 +37,8 @@ static void probe_task(void *argument)
             .url = url,
             .method = HTTP_METHOD_GET,
             .timeout_ms = 5000,
-            .buffer_size = 512,
-            .buffer_size_tx = 256,
+            .buffer_size = 1024,
+            .buffer_size_tx = 1024,
         };
         esp_http_client_handle_t client = esp_http_client_init(&client_config);
         if (client == NULL) {
@@ -50,6 +50,7 @@ static void probe_task(void *argument)
         (void)esp_http_client_set_header(client, "Authorization", authorization);
         const esp_err_t result = esp_http_client_perform(client);
         const int status = esp_http_client_get_status_code(client);
+        ESP_LOGI("backend", "HA probe result=%s http_status=%d", esp_err_to_name(result), status);
         esp_http_client_cleanup(client);
         if ((result == ESP_OK) && (status >= 200) && (status < 300)) {
             update_state(APP_BACKEND_ONLINE, "Backend online", config.ha_endpoint);

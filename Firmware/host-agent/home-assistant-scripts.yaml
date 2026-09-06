@@ -1,0 +1,26 @@
+pc_open_vscode:
+  alias: Mini TV PC — Open VS Code
+  mode: single
+  sequence:
+    - event: pc_ui_action
+      event_data:
+        action_id: open_vscode
+        request_id: "{{ request_id }}"
+
+pc_open_bilibili:
+  alias: Mini TV PC — Open Bilibili
+  mode: single
+  sequence:
+    - event: pc_ui_action
+      event_data:
+        action_id: open_bilibili
+        request_id: "{{ request_id }}"
+
+pc_open_douyin:
+  alias: Mini TV PC — Open Douyin
+  mode: single
+  sequence:
+    - event: pc_ui_action
+      event_data:
+        action_id: open_douyin
+        request_id: "{{ request_id }}"

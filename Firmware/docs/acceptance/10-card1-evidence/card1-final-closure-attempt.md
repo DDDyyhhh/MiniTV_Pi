@@ -59,3 +59,15 @@ Task WDT=0; abort=0; lwIP assertion=0
 2. `Weather Trend updated: 24 hourly points`；
 3. 图表与极值的屏幕观察；
 4. 断开 STA / 重启后的 NVS `Stale Data` 恢复。
+
+## 2026-09-05 真机复验
+
+- 主机网卡 `enp34s0` 已改为静态地址 `192.169.0.48/23`，网关 `192.169.0.1`；NetworkManager 配置保持自动连接。主机 MAC 为 `2C:F0:5D:08:0C:A6`，也可在路由器中为该 MAC 配置 DHCP 地址保留。
+- Home Assistant 容器状态为 `running`，重启策略为 `unless-stopped`，宿主机 `8123` 端口正常监听。
+- 固件已重新编译并烧录，应用大小 `0x157830`，小于 factory 分区 `0x3f0000`。
+- 设备重启后读取到 NVS 天气缓存：`Weather cache loaded; waiting for SNTP age validation`。
+- STA 获取地址 `192.169.0.57`，HA 探测 `ESP_OK http_status=200`，天气连续成功更新 `24 hourly points`，随后 `SNTP synchronized`。
+- 运行约 60 秒的诊断：`free_heap=106996`、`minimum_free_heap=87552`、`largest_free_block=86016`、`fps=50`；未出现 WDT、abort 或 assertion。
+- 完整串口证据：`card1-static-ip-cache-restart-20260905.log`。
+
+本次已验证主机重启后不需要手动执行 `docker start`；只要 Docker 服务开机启动，Home Assistant 会按 `unless-stopped` 自动启动。工单 10 的天气数据链路和重启缓存恢复已通过真机验证。

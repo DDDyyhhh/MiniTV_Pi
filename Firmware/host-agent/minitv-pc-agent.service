@@ -1,0 +1,17 @@
+[Unit]
+Description=Mini TV PC Metrics and Command Agent
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/minitv-pc-agent/environment
+Environment=DISPLAY=:1
+Environment=XAUTHORITY=%t/gdm/Xauthority
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
+ExecStart=%h/.local/share/minitv-pc-agent/venv/bin/python %h/.local/share/minitv-pc-agent/minitv_pc_agent.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
