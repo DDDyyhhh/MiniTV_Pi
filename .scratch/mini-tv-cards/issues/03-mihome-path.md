@@ -26,3 +26,4 @@ Blocked by:
 - ESP32 的稳定业务契约只识别 `light.*`、`switch.*` 及它们的 `on`/`off`、`unavailable`/`unknown` 状态；控制使用 `light.turn_on/off` 或 `switch.turn_on/off`，服务成功后等待 HA 状态回读确认。需要时用 HA Template light/switch 包装不合适的底层实体。
 
 详细比较、型号验证清单、断 WAN 验收步骤和来源见[研究报告](../research/mihome-path.md)。
+GitHub Issue：[#3](https://github.com/DDDyyhhh/MiniTV_Pi/issues/3)，状态：closed。

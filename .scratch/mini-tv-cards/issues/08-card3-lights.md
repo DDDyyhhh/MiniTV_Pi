@@ -145,3 +145,4 @@ Content-Type: application/json
 - [ ] Smart Home Card 在 240x320 真机上四个 Tile 不重叠、不遮挡顶部下拉热区,且每个触摸目标不小于 44x44px。
 - [ ] 电脑/HA Host 关机时卡片明确显示后端离线且所有 Tile 禁用;HA 恢复后可刷新状态并恢复控制。
 
+GitHub Issue：[#12](https://github.com/DDDyyhhh/MiniTV_Pi/issues/12)，状态：closed。

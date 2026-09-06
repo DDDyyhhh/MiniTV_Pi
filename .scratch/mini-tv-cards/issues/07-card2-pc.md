@@ -153,3 +153,4 @@ Content-Type: application/json
 - [ ] 停止 agent、停止 HA Container、关闭图形会话分别验证:卡片显示 agent 离线、HA 离线或 action 失败,不显示旧数据为实时成功。
 - [ ] 卡片2在 240x320 真机无文字/仪表/快捷区重叠,左右 tile 滑动不被快捷按钮误触打断。
 
+GitHub Issue：[#8](https://github.com/DDDyyhhh/MiniTV_Pi/issues/8)，状态：closed。

@@ -87,3 +87,4 @@ Blocked by:
 - 工单 05 可直接把“LVGL 8.3.11 + 局部 DMA 双 buffer + tileview + 控制中心 overlay + heap/FPS 基线”写入骨架验收。
 - 工单 06/07/08 的 UI 方案必须遵守以上字体、布局和状态模型;新文案需要加入字体子集清单。
 - 工单 09 实现前必须修正 `sdkconfig` 的 flash size 为 4MB,并在真机记录启动后 free heap、minimum free heap、largest free block 和滑动帧率。
+GitHub Issue：[#4](https://github.com/DDDyyhhh/MiniTV_Pi/issues/4)，状态：closed。

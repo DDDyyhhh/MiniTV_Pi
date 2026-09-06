@@ -120,3 +120,4 @@ Blocked by: 01
 - [ ] 记录实际 flash 占用、RAM 基线和 LVGL buffer 行数。
 - [ ] 确认三张业务卡片仍为占位/空数据安全态,没有把模拟数据误当真实功能。
 
+GitHub Issue：[#2](https://github.com/DDDyyhhh/MiniTV_Pi/issues/2)，状态：closed。

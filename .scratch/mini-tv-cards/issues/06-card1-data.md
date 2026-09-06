@@ -107,3 +107,4 @@ Blocked by: 01, 04
 - [ ] Weather Trend 响应 JSON 在 8 KiB 上限内解析;超限时失败降级且不造成 heap 持续下降。
 - [ ] HA Host 关机时,Time Card 仍保留时钟和节假日,天气进入缓存/离线态。
 
+GitHub Issue：[#11](https://github.com/DDDyyhhh/MiniTV_Pi/issues/11)，状态：closed。

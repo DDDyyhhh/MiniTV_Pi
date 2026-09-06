@@ -92,4 +92,5 @@ services:
 
 ### 安装责任归属
 
+GitHub Issue：[#6](https://github.com/DDDyyhhh/MiniTV_Pi/issues/6)，状态：closed。
 本努力的固件实现不会直接在当前会话安装/改动用户 Linux 主机。后续执行时,安装 HA Container 与本机 agent 属于工单 11 的电脑侧部署范围;若需要在卡片3前先完成米家联调,工单 12 也可引用本安装清单。工单 09 骨架仍可先以“未配置 HA/HA 离线”模式验收。

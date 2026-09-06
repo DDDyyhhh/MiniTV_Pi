@@ -35,3 +35,4 @@ Status: resolved
 - 当前 PCB 未连接 ST7789 TE 信号，TE 同步不属于本工单范围。
 
 验收记录已更新至 `Firmware/docs/acceptance/09-skeleton-acceptance.md`。工单 09 状态正式标记为 **resolved**。
+GitHub Issue：[#7](https://github.com/DDDyyhhh/MiniTV_Pi/issues/7)，状态：closed。

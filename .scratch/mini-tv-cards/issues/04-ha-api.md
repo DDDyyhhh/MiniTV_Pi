@@ -27,3 +27,4 @@ Blocked by:
 - 生产默认 HTTPS 且校验证书与主机名，LLAT 与私有 CA 资料使用 NVS encryption 存储，日志/页面绝不输出 token。短时隔离调试的 HTTP 是显式不安全例外，禁止静默降级。JSON 用显式锁定的 `espressif/cjson`，单实体/服务/天气响应初始上限分别为 2/4/8 KiB，并在真机测量堆峰值后调优。
 
 完整的端点、重试、UI pending/confirmed 状态机、请求示例及一手来源见[研究报告](../research/ha-api.md)。
+GitHub Issue：[#9](https://github.com/DDDyyhhh/MiniTV_Pi/issues/9)，状态：closed。

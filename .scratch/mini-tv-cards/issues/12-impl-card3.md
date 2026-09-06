@@ -16,4 +16,5 @@ Blocked by: 08, 09
 
 ## Answer
 
+GitHub Issue：[#10](https://github.com/DDDyyhhh/MiniTV_Pi/issues/10)，状态：open。
 (待解决后填写)

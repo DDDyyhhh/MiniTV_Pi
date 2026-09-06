@@ -39,3 +39,4 @@ Blocked by: 06, 09
 - HA 端验证：`weather.forecast_home` 当前状态读取为 HTTP 200；服务 metadata 表明 `weather.get_forecasts` 仅声明 `type` 字段，顶层 `entity_id` 请求返回 HTTP 200，旧 `target` 请求返回 HTTP 400。固件已完成兼容修复。
 - 早期 STA 联调曾记录 `STA disconnected: reason=201`（`WIFI_REASON_NO_AP_FOUND`）并回退 Provisioning Portal；该历史记录保留在 `Firmware/docs/acceptance/10-card1-evidence/sta-no-ap-found-10mhz.log`。
 - 用户重新提交配置后的最新监视未出现 STA 断开或 Provisioning Portal 回退，且天气任务反复发起连接（该任务仅会在 `IP_EVENT_STA_GOT_IP` 后启动）；不过 ESP32 到 `192.168.10.55:8123` 的 TCP 连接持续超时。尚未捕获启动阶段的精确 IP/SNTP 日志，也未取得 forecast 响应，故 24 点曲线、极值、NVS 快照与 `Stale Data` 重启恢复仍未完成现场验收；详情见 `Firmware/docs/acceptance/10-card1-evidence/2026-08-25-post-provisioning-monitor.md`。
+GitHub Issue：[#5](https://github.com/DDDyyhhh/MiniTV_Pi/issues/5)，状态：open。
