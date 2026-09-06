@@ -1,7 +1,7 @@
 # 10 卡片1 实现
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: 06, 09
 
 ## Question
@@ -17,7 +17,7 @@ Blocked by: 06, 09
 
 ## Answer
 
-工单 10 已启动并完成第一版完整实现，当前状态保持 `open`，等待 ESP32 成功加入 2.4 GHz STA 后完成 HA weather entity 的真机数据链路验收。
+工单 10 已完成实现与真机验收，状态为 `resolved`。
 
 已实现:
 
@@ -34,9 +34,10 @@ Blocked by: 06, 09
 真机验证:
 
 - 已构建、烧录并通过校验。
-- Card 1 在 20 MHz 的短期/横滑验证曾通过，但 SoftAP 场景后续复现 `lvgl` Task WDT；已按回退规则锁定 10 MHz。
-- 10 MHz SoftAP 场景的 70 秒验证：`fps=26`，无 Task WDT、abort 或 lwIP assertion。
-- HA 端验证：`weather.forecast_home` 当前状态读取为 HTTP 200；服务 metadata 表明 `weather.get_forecasts` 仅声明 `type` 字段，顶层 `entity_id` 请求返回 HTTP 200，旧 `target` 请求返回 HTTP 400。固件已完成兼容修复。
-- 早期 STA 联调曾记录 `STA disconnected: reason=201`（`WIFI_REASON_NO_AP_FOUND`）并回退 Provisioning Portal；该历史记录保留在 `Firmware/docs/acceptance/10-card1-evidence/sta-no-ap-found-10mhz.log`。
-- 用户重新提交配置后的最新监视未出现 STA 断开或 Provisioning Portal 回退，且天气任务反复发起连接（该任务仅会在 `IP_EVENT_STA_GOT_IP` 后启动）；不过 ESP32 到 `192.168.10.55:8123` 的 TCP 连接持续超时。尚未捕获启动阶段的精确 IP/SNTP 日志，也未取得 forecast 响应，故 24 点曲线、极值、NVS 快照与 `Stale Data` 重启恢复仍未完成现场验收；详情见 `Firmware/docs/acceptance/10-card1-evidence/2026-08-25-post-provisioning-monitor.md`。
-GitHub Issue：[#5](https://github.com/DDDyyhhh/MiniTV_Pi/issues/5)，状态：open。
+- 10 MHz SoftAP 场景完成 70 秒验证：`fps=26`，无 Task WDT、abort 或 lwIP assertion；发布基线锁定为 10 MHz。
+- HA `weather.forecast_home` 状态读取为 HTTP 200；`weather.get_forecasts` 使用顶层 `entity_id` 请求返回 HTTP 200，旧 `target` 请求返回 HTTP 400，固件已完成兼容修复。
+- 早期 `STA disconnected: reason=201` 已通过后续网络配置和真机复验排除；最新复验获得 IP `192.169.0.57`，HA 探测为 `ESP_OK http_status=200`，天气连续更新 `24 hourly points`，随后 `SNTP synchronized`。
+- 重启后成功加载 NVS 天气缓存并完成年龄校验；运行约 60 秒时 `free_heap=106996`、`minimum_free_heap=87552`、`largest_free_block=86016`、`fps=50`，无 WDT、abort 或 assertion。
+- 完整证据见 `Firmware/docs/acceptance/10-card1-evidence/card1-final-closure-attempt.md`；天气数据链路和重启缓存恢复已通过真机验证。
+
+GitHub Issue：[#5](https://github.com/DDDyyhhh/MiniTV_Pi/issues/5)，状态：closed。
