@@ -1,0 +1,51 @@
+--- a/probe.c
++++ b/probe.c
+@@ -92,7 +92,9 @@
+     }
+     esp_http_client_set_header(client, "Accept", "application/json");
+     esp_http_client_set_header(client, "Accept-Encoding", accept_encoding);
+-    const esp_err_t result = esp_http_client_perform(client);
++    const esp_err_t transport_result = esp_http_client_perform(client);
++    /* ESP-IDF v6 ignores the ON_DATA callback's return value. Enforce the bound here. */
++    const esp_err_t result = response.overflow ? ESP_ERR_INVALID_SIZE : transport_result;
+     const int status = esp_http_client_get_status_code(client);
+     const int64_t content_length = esp_http_client_get_content_length(client);
+     const bool chunked = esp_http_client_is_chunked_response(client);
+@@ -101,8 +103,8 @@
+     const uint32_t after_min = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
+     const uint32_t after_largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+     const uint16_t fps_after = ui_runtime_fps();
+-    ESP_LOGI(TAG, "result scenario=%s err=%s status=%d connected=%d finished=%d bytes=%u events=%u overflow=%d content_length=%lld chunked=%d content_encoding=%s transfer_encoding=%s elapsed_ms=%lld free_before=%u free_after=%u min_before=%u min_after=%u largest_before=%u largest_after=%u fps_before=%u fps_after=%u",
+-             scenario, esp_err_to_name(result), status, response.connected, response.finished,
++    ESP_LOGI(TAG, "result scenario=%s err=%s transport_err=%s status=%d connected=%d finished=%d bytes=%u events=%u overflow=%d content_length=%lld chunked=%d content_encoding=%s transfer_encoding=%s elapsed_ms=%lld free_before=%u free_after=%u min_before=%u min_after=%u largest_before=%u largest_after=%u fps_before=%u fps_after=%u",
++             scenario, esp_err_to_name(result), esp_err_to_name(transport_result), status, response.connected, response.finished,
+              (unsigned)response.body_len, response.data_events, response.overflow,
+              (long long)content_length, chunked,
+              response.content_encoding[0] ? response.content_encoding : "identity",
+@@ -136,6 +138,26 @@
+         vTaskDelete(NULL);
+         return;
+     }
++#ifdef PROBE_FAULT_MODE
++    char url[128];
++    static const struct { const char *name; const char *path; } cases[] = {
++        {"http_429", "/status/429"},
++        {"http_503", "/status/503"},
++        {"timeout", "/timeout"},
++        {"truncated", "/truncated"},
++        {"oversize", "/oversize"},
++        {"malformed_json", "/malformed-json"},
++    };
++    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
++        snprintf(url, sizeof(url), "http://%s:18822%s", PROBE_FAULT_HOST, cases[i].path);
++        run_request(cases[i].name, url, "identity");
++    }
++    snprintf(url, sizeof(url), "https://%s:18823/tls", PROBE_FAULT_HOST);
++    run_request("untrusted_tls", url, "identity");
++    ESP_LOGI(TAG, "done fault_cases=7");
++    vTaskDelete(NULL);
++    return;
++#endif
+     run_request("current_1", PROBE_URL, "identity");
+     run_request("bad_parameter_400", "https://api.open-meteo.com/v1/forecast?latitude=invalid&longitude=116.4074&current=temperature_2m", "identity");
+     run_request("dns_failure", "https://minitv-probe.invalid/v1/forecast", "identity");

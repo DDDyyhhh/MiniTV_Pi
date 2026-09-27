@@ -1,0 +1,54 @@
+HOST_UTC=2026-09-27T09:59:44+00:00
+OM-PROBE: start task_created=1 body_limit=1024 timeout_ms=8000 interval_ms=1800000
+HOST_UTC=2026-09-27T09:59:47+00:00
+OM-PROBE: ready wifi=1 time_synced=1
+HOST_UTC=2026-09-27T09:59:50+00:00
+OM-PROBE: result scenario=current_1 err=ESP_OK status=200 connected=1 finished=1 bytes=329 events=1 overflow=0 content_length=-1 chunked=1 content_encoding=identity transfer_encoding=chunked elapsed_ms=3069 free_before=70036 free_after=41248 min_before=54732 min_after=20120 largest_before=47104 largest_after=24576 fps_before=51 fps_after=51
+HOST_UTC=2026-09-27T09:59:50+00:00
+OM-PROBE: body scenario=current_1 json={"latitude":39.89455,"longitude":116.35983,"generationtime_ms":0.029206275939941406,"utc_offset_seconds":28800,"timezone":"GMT+0800","timezone_abbreviation":"GMT+8","elevation":47.0,"current_units":{"time":"unixtime","interval":"seconds","temperature_2m":"°C"},"current":{"time":1790502300,"interval":900,"temperature_2m":24.4}}
+HOST_UTC=2026-09-27T09:59:53+00:00
+OM-PROBE: result scenario=bad_parameter_400 err=ESP_OK status=400 connected=1 finished=1 bytes=98 events=1 overflow=0 content_length=98 chunked=0 content_encoding=identity transfer_encoding=none elapsed_ms=3015 free_before=69172 free_after=41088 min_before=20120 min_after=20120 largest_before=24576 largest_after=24576 fps_before=51 fps_after=50
+HOST_UTC=2026-09-27T09:59:53+00:00
+OM-PROBE: result scenario=dns_failure err=ESP_ERR_HTTP_CONNECT status=0 connected=0 finished=0 bytes=0 events=0 overflow=0 content_length=0 chunked=0 content_encoding=identity transfer_encoding=none elapsed_ms=88 free_before=68956 free_after=66564 min_before=20120 min_after=20120 largest_before=24576 largest_after=24576 fps_before=50 fps_after=50
+HOST_UTC=2026-09-27T09:59:56+00:00
+OM-PROBE: result scenario=deflate_offer err=ESP_OK status=200 connected=1 finished=1 bytes=225 events=2 overflow=0 content_length=-1 chunked=1 content_encoding=deflate transfer_encoding=chunked elapsed_ms=2831 free_before=68956 free_after=40764 min_before=20120 min_after=20108 largest_before=24576 largest_after=24576 fps_before=50 fps_after=50
+HOST_UTC=2026-09-27T09:59:56+00:00
+OM-PROBE: interval_start seconds=1800
+PERIODIC free_heap=68856 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=68856 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69536 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69544 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69524 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=65360 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69544 minimum_free_heap=20108 largest_free_block=24576 fps=51
+PERIODIC free_heap=69544 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69544 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69544 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69568 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69380 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69568 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69568 minimum_free_heap=20108 largest_free_block=24576 fps=51
+PERIODIC free_heap=69568 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69568 minimum_free_heap=20108 largest_free_block=24576 fps=51
+PERIODIC free_heap=69568 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69568 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69568 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69176 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69176 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69364 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69364 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69176 minimum_free_heap=20108 largest_free_block=24576 fps=51
+PERIODIC free_heap=69176 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69364 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69364 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69364 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69364 minimum_free_heap=20108 largest_free_block=24576 fps=50
+PERIODIC free_heap=69364 minimum_free_heap=20108 largest_free_block=24576 fps=50
+HOST_UTC=2026-09-27T10:29:56+00:00
+OM-PROBE: interval_end wifi=1 time_synced=1
+HOST_UTC=2026-09-27T10:29:59+00:00
+OM-PROBE: result scenario=current_2 err=ESP_OK status=200 connected=1 finished=1 bytes=328 events=1 overflow=0 content_length=-1 chunked=1 content_encoding=identity transfer_encoding=chunked elapsed_ms=3375 free_before=69364 free_after=41056 min_before=20108 min_after=20108 largest_before=24576 largest_after=24576 fps_before=50 fps_after=51
+HOST_UTC=2026-09-27T10:29:59+00:00
+OM-PROBE: body scenario=current_2 json={"latitude":39.89455,"longitude":116.35983,"generationtime_ms":0.02181529998779297,"utc_offset_seconds":28800,"timezone":"GMT+0800","timezone_abbreviation":"GMT+8","elevation":47.0,"current_units":{"time":"unixtime","interval":"seconds","temperature_2m":"°C"},"current":{"time":1790504100,"interval":900,"temperature_2m":23.7}}
+HOST_UTC=2026-09-27T10:29:59+00:00
+OM-PROBE: done samples=2

@@ -1,0 +1,153 @@
+{
+  "results": {
+    "current_1": {
+      "scenario": "current_1",
+      "err": "ESP_OK",
+      "status": "200",
+      "connected": "1",
+      "finished": "1",
+      "bytes": "329",
+      "events": "1",
+      "overflow": "0",
+      "content_length": "-1",
+      "chunked": "1",
+      "content_encoding": "identity",
+      "transfer_encoding": "chunked",
+      "elapsed_ms": "3069",
+      "free_before": "70036",
+      "free_after": "41248",
+      "min_before": "54732",
+      "min_after": "20120",
+      "largest_before": "47104",
+      "largest_after": "24576",
+      "fps_before": "51",
+      "fps_after": "51"
+    },
+    "bad_parameter_400": {
+      "scenario": "bad_parameter_400",
+      "err": "ESP_OK",
+      "status": "400",
+      "connected": "1",
+      "finished": "1",
+      "bytes": "98",
+      "events": "1",
+      "overflow": "0",
+      "content_length": "98",
+      "chunked": "0",
+      "content_encoding": "identity",
+      "transfer_encoding": "none",
+      "elapsed_ms": "3015",
+      "free_before": "69172",
+      "free_after": "41088",
+      "min_before": "20120",
+      "min_after": "20120",
+      "largest_before": "24576",
+      "largest_after": "24576",
+      "fps_before": "51",
+      "fps_after": "50"
+    },
+    "dns_failure": {
+      "scenario": "dns_failure",
+      "err": "ESP_ERR_HTTP_CONNECT",
+      "status": "0",
+      "connected": "0",
+      "finished": "0",
+      "bytes": "0",
+      "events": "0",
+      "overflow": "0",
+      "content_length": "0",
+      "chunked": "0",
+      "content_encoding": "identity",
+      "transfer_encoding": "none",
+      "elapsed_ms": "88",
+      "free_before": "68956",
+      "free_after": "66564",
+      "min_before": "20120",
+      "min_after": "20120",
+      "largest_before": "24576",
+      "largest_after": "24576",
+      "fps_before": "50",
+      "fps_after": "50"
+    },
+    "deflate_offer": {
+      "scenario": "deflate_offer",
+      "err": "ESP_OK",
+      "status": "200",
+      "connected": "1",
+      "finished": "1",
+      "bytes": "225",
+      "events": "2",
+      "overflow": "0",
+      "content_length": "-1",
+      "chunked": "1",
+      "content_encoding": "deflate",
+      "transfer_encoding": "chunked",
+      "elapsed_ms": "2831",
+      "free_before": "68956",
+      "free_after": "40764",
+      "min_before": "20120",
+      "min_after": "20108",
+      "largest_before": "24576",
+      "largest_after": "24576",
+      "fps_before": "50",
+      "fps_after": "50"
+    },
+    "current_2": {
+      "scenario": "current_2",
+      "err": "ESP_OK",
+      "status": "200",
+      "connected": "1",
+      "finished": "1",
+      "bytes": "328",
+      "events": "1",
+      "overflow": "0",
+      "content_length": "-1",
+      "chunked": "1",
+      "content_encoding": "identity",
+      "transfer_encoding": "chunked",
+      "elapsed_ms": "3375",
+      "free_before": "69364",
+      "free_after": "41056",
+      "min_before": "20108",
+      "min_after": "20108",
+      "largest_before": "24576",
+      "largest_after": "24576",
+      "fps_before": "50",
+      "fps_after": "51"
+    }
+  },
+  "checks": {
+    "current_1": [],
+    "current_2": []
+  },
+  "fault_checks": {
+    "bad_parameter_400": [],
+    "dns_failure": [],
+    "deflate_offer": []
+  },
+  "interval_seconds": 1809,
+  "interval_check": [],
+  "periodic": {
+    "count": 30,
+    "free_heap": {
+      "min": 65360,
+      "max": 69568,
+      "median": 69452.0
+    },
+    "minimum_free_heap": {
+      "min": 20108,
+      "max": 20108,
+      "median": 20108.0
+    },
+    "largest_free_block": {
+      "min": 24576,
+      "max": 24576,
+      "median": 24576.0
+    },
+    "fps": {
+      "min": 50,
+      "max": 51,
+      "median": 50.0
+    }
+  }
+}
