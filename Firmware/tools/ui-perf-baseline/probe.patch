@@ -1,0 +1,585 @@
+diff --git a/Firmware/main/CMakeLists.txt b/Firmware/main/CMakeLists.txt
+index 009c1f3..d76dadc 100644
+--- a/Firmware/main/CMakeLists.txt
++++ b/Firmware/main/CMakeLists.txt
+@@ -16,6 +16,7 @@ idf_component_register(
+         "board_touch.c"
+         "config_store.c"
+         "diagnostics.c"
++        "ui_perf_probe.c"
+         "ui_runtime.c"
+         "ui_shell.c"
+         "ui_control_center.c"
+diff --git a/Firmware/main/board_display.c b/Firmware/main/board_display.c
+index e55bb1a..4e11614 100644
+--- a/Firmware/main/board_display.c
++++ b/Firmware/main/board_display.c
+@@ -8,6 +8,7 @@
+ #include "esp_lcd_panel_io.h"
+ #include "esp_lcd_io_spi.h"
+ #include "esp_lcd_panel_st7789.h"
++#include "esp_timer.h"
+ #include "esp_log.h"
+ #include "freertos/FreeRTOS.h"
+ #include "freertos/semphr.h"
+@@ -22,12 +23,31 @@ static const char *TAG = "board_display";
+ static esp_lcd_panel_handle_t s_panel;
+ static esp_lcd_panel_io_handle_t s_io;
+ static SemaphoreHandle_t s_transfer_done;
++static portMUX_TYPE s_perf_lock = portMUX_INITIALIZER_UNLOCKED;
++static board_display_perf_snapshot_t s_perf;
++static int64_t s_perf_started_us;
++static uint32_t s_perf_pending_pixels;
++static bool s_perf_pending;
++
+ 
+ static bool on_color_transfer_done(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *event_data, void *user_context)
+ {
+     (void)panel_io;
+     (void)event_data;
+     (void)user_context;
++    const int64_t completed_us = esp_timer_get_time();
++    portENTER_CRITICAL_ISR(&s_perf_lock);
++    if (s_perf_pending) {
++        const uint32_t duration_us = (uint32_t)(completed_us - s_perf_started_us);
++        s_perf.transfers++;
++        s_perf.pixels += s_perf_pending_pixels;
++        s_perf.transfer_total_us += duration_us;
++        if (duration_us > s_perf.transfer_max_us) {
++            s_perf.transfer_max_us = duration_us;
++        }
++        s_perf_pending = false;
++    }
++    portEXIT_CRITICAL_ISR(&s_perf_lock);
+     BaseType_t high_priority_woken = pdFALSE;
+     xSemaphoreGiveFromISR(s_transfer_done, &high_priority_woken);
+     return high_priority_woken == pdTRUE;
+@@ -117,6 +137,65 @@ void board_display_wait_for_transfer(void)
+     (void)xSemaphoreTake(s_transfer_done, pdMS_TO_TICKS(1000));
+ }
+ 
++void board_display_perf_begin_transfer(uint32_t pixels)
++{
++    portENTER_CRITICAL(&s_perf_lock);
++    if (s_perf_pending) {
++        s_perf.overlaps++;
++    }
++    s_perf_started_us = esp_timer_get_time();
++    s_perf_pending_pixels = pixels;
++    s_perf_pending = true;
++    portEXIT_CRITICAL(&s_perf_lock);
++}
++
++void board_display_perf_cancel_transfer(void)
++{
++    portENTER_CRITICAL(&s_perf_lock);
++    s_perf_pending = false;
++    portEXIT_CRITICAL(&s_perf_lock);
++}
++
++bool board_display_perf_wait_idle(void)
++{
++    const int64_t deadline_us = esp_timer_get_time() + 1000000LL;
++    while (true) {
++        portENTER_CRITICAL(&s_perf_lock);
++        const bool pending = s_perf_pending;
++        portEXIT_CRITICAL(&s_perf_lock);
++        if (!pending) {
++            return true;
++        }
++        if (esp_timer_get_time() >= deadline_us) {
++            return false;
++        }
++        vTaskDelay(1);
++    }
++}
++
++bool board_display_perf_reset(void)
++{
++    if (!board_display_perf_wait_idle()) {
++        return false;
++    }
++    portENTER_CRITICAL(&s_perf_lock);
++    s_perf = (board_display_perf_snapshot_t){0};
++    s_perf_started_us = 0;
++    s_perf_pending_pixels = 0;
++    portEXIT_CRITICAL(&s_perf_lock);
++    return true;
++}
++
++void board_display_perf_snapshot(board_display_perf_snapshot_t *out_snapshot)
++{
++    if (out_snapshot == NULL) {
++        return;
++    }
++    portENTER_CRITICAL(&s_perf_lock);
++    *out_snapshot = s_perf;
++    portEXIT_CRITICAL(&s_perf_lock);
++}
++
+ esp_lcd_panel_handle_t board_display_panel(void)
+ {
+     return s_panel;
+diff --git a/Firmware/main/board_display.h b/Firmware/main/board_display.h
+index 58e8f00..6e8a35d 100644
+--- a/Firmware/main/board_display.h
++++ b/Firmware/main/board_display.h
+@@ -1,11 +1,25 @@
+ #pragma once
+ 
+ #include <stdbool.h>
++#include <stdint.h>
+ 
+ #include "esp_err.h"
+ #include "esp_lcd_panel_ops.h"
+ 
++typedef struct {
++    uint32_t transfers;
++    uint32_t pixels;
++    uint64_t transfer_total_us;
++    uint32_t transfer_max_us;
++    uint32_t overlaps;
++} board_display_perf_snapshot_t;
++
+ esp_err_t board_display_init(void);
+ esp_lcd_panel_handle_t board_display_panel(void);
+ bool board_display_is_ready(void);
+ void board_display_wait_for_transfer(void);
++void board_display_perf_begin_transfer(uint32_t pixels);
++void board_display_perf_cancel_transfer(void);
++bool board_display_perf_wait_idle(void);
++bool board_display_perf_reset(void);
++void board_display_perf_snapshot(board_display_perf_snapshot_t *out_snapshot);
+diff --git a/Firmware/main/main.c b/Firmware/main/main.c
+index d4701c6..a4d0c94 100644
+--- a/Firmware/main/main.c
++++ b/Firmware/main/main.c
+@@ -18,6 +18,7 @@
+ #include "network_manager.h"
+ #include "ui_shell.h"
+ #include "ui_runtime.h"
++#include "ui_perf_probe.h"
+ 
+ #if __has_include("local_credentials.h")
+ #include "local_credentials.h"
+@@ -82,6 +83,7 @@ void app_main(void)
+     }
+     ui_shell_refresh();
+     ESP_ERROR_CHECK(ui_runtime_start());
++    ESP_ERROR_CHECK(ui_perf_probe_start());
+     diagnostics_log_baseline("shell-ready");
+     xTaskCreate(diagnostics_task, "diagnostics", 3072, NULL, 2, NULL);
+ }
+diff --git a/Firmware/main/ui_perf_probe.c b/Firmware/main/ui_perf_probe.c
+new file mode 100644
+index 0000000..908d4e4
+--- /dev/null
++++ b/Firmware/main/ui_perf_probe.c
+@@ -0,0 +1,380 @@
++#include "ui_perf_probe.h"
++
++#include <inttypes.h>
++
++#include "board_display.h"
++#include "esp_event.h"
++#include "esp_heap_caps.h"
++#include "esp_log.h"
++#include "esp_timer.h"
++#include "esp_wifi.h"
++#include "freertos/FreeRTOS.h"
++#include "freertos/task.h"
++#include "lvgl.h"
++#include "ui_runtime.h"
++
++#define PROBE_TAG "PERF-PROBE"
++#define PROBE_SETTLE_MS 250U
++#define NETWORK_SAMPLE_TARGET 20U
++#define NETWORK_SCAN_LIMIT 20U
++
++typedef enum {
++    PROBE_UPDATE_TEXT,
++    PROBE_UPDATE_COLOR,
++} probe_update_kind_t;
++
++typedef struct {
++    const char *name;
++    lv_obj_t *object;
++    const char *value_a;
++    const char *value_b;
++    uint16_t samples;
++    uint16_t period_ms;
++    probe_update_kind_t update_kind;
++} probe_scenario_t;
++
++typedef struct {
++    uint32_t render_total_us;
++    uint32_t render_max_us;
++    uint32_t schedule_jitter_max_us;
++    uint16_t completed_samples;
++} probe_run_stats_t;
++
++static lv_obj_t *s_probe_screen;
++static lv_obj_t *s_clock_region;
++static lv_obj_t *s_date_region;
++static lv_obj_t *s_temperature_region;
++static lv_obj_t *s_motion_region;
++static portMUX_TYPE s_scan_lock = portMUX_INITIALIZER_UNLOCKED;
++static bool s_scan_active;
++static uint16_t s_scan_done_events;
++
++static void style_probe_object(lv_obj_t *object, int32_t x, int32_t y, int32_t width, int32_t height)
++{
++    lv_obj_set_pos(object, x, y);
++    lv_obj_set_size(object, width, height);
++    lv_obj_set_style_radius(object, 0, 0);
++    lv_obj_set_style_border_width(object, 0, 0);
++    lv_obj_set_style_pad_all(object, 0, 0);
++    lv_obj_set_style_bg_opa(object, LV_OPA_COVER, 0);
++    lv_obj_set_style_bg_color(object, lv_color_hex(0x29243A), 0);
++    lv_obj_set_style_text_color(object, lv_color_hex(0xF0C98C), 0);
++    lv_obj_set_style_text_align(object, LV_TEXT_ALIGN_CENTER, 0);
++    lv_obj_clear_flag(object, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
++}
++
++static lv_obj_t *create_text_region(lv_obj_t *parent, int32_t x, int32_t y, int32_t width, int32_t height,
++                                    const char *text)
++{
++    lv_obj_t *label = lv_label_create(parent);
++    style_probe_object(label, x, y, width, height);
++    lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
++    lv_label_set_text(label, text);
++    return label;
++}
++
++static bool create_probe_surface(void)
++{
++    if (!ui_runtime_lock(1000)) {
++        return false;
++    }
++    s_probe_screen = lv_obj_create(NULL);
++    style_probe_object(s_probe_screen, 0, 0, 320, 240);
++    s_clock_region = create_text_region(s_probe_screen, 244, 12, 64, 24, "23:59");
++    s_date_region = create_text_region(s_probe_screen, 228, 40, 80, 12, "09/23");
++    s_temperature_region = create_text_region(s_probe_screen, 212, 58, 96, 16, "26 C");
++    s_motion_region = lv_obj_create(s_probe_screen);
++    style_probe_object(s_motion_region, 130, 126, 16, 16);
++    lv_obj_set_style_bg_color(s_motion_region, lv_color_hex(0xD4A574), 0);
++    lv_scr_load(s_probe_screen);
++    lv_refr_now(NULL);
++    ui_runtime_unlock();
++    vTaskDelay(pdMS_TO_TICKS(PROBE_SETTLE_MS));
++    return true;
++}
++
++static bool prepare_measurement(const char *scenario)
++{
++    if (!ui_runtime_lock(1000)) {
++        ESP_LOGE(PROBE_TAG, "failed scenario=%s reason=lvgl_lock_timeout phase=prepare", scenario);
++        return false;
++    }
++    const bool ready = board_display_perf_reset();
++    ui_runtime_unlock();
++    if (!ready) {
++        ESP_LOGE(PROBE_TAG, "failed scenario=%s reason=display_idle_timeout phase=prepare", scenario);
++    }
++    return ready;
++}
++
++static bool finish_measurement(const char *scenario)
++{
++    if (!ui_runtime_lock(1000)) {
++        ESP_LOGE(PROBE_TAG, "failed scenario=%s reason=lvgl_lock_timeout phase=finish", scenario);
++        return false;
++    }
++    const bool ready = board_display_perf_wait_idle();
++    ui_runtime_unlock();
++    if (!ready) {
++        ESP_LOGE(PROBE_TAG, "failed scenario=%s reason=display_idle_timeout phase=finish", scenario);
++    }
++    return ready;
++}
++
++static void log_result(const char *name, uint16_t samples, uint16_t failed_samples, uint32_t render_total_us,
++                       uint32_t render_max_us, uint32_t schedule_jitter_max_us)
++{
++    board_display_perf_snapshot_t display = {0};
++    board_display_perf_snapshot(&display);
++    ESP_LOGI(PROBE_TAG,
++             "result scenario=%s samples=%u failed_samples=%u transfers=%" PRIu32 " pixels=%" PRIu32
++             " transfer_total_us=%" PRIu64 " transfer_max_us=%" PRIu32
++             " render_total_us=%" PRIu32 " render_max_us=%" PRIu32
++             " schedule_jitter_max_us=%" PRIu32 " overlaps=%" PRIu32
++             " free_heap=%u minimum_free_heap=%u largest_free_block=%u",
++             name, samples, failed_samples, display.transfers, display.pixels, display.transfer_total_us,
++             display.transfer_max_us, render_total_us, render_max_us, schedule_jitter_max_us, display.overlaps,
++             (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
++             (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT),
++             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
++}
++
++static void apply_update(const probe_scenario_t *scenario, bool alternate)
++{
++    if (scenario->update_kind == PROBE_UPDATE_TEXT) {
++        lv_label_set_text(scenario->object, alternate ? scenario->value_b : scenario->value_a);
++        return;
++    }
++    lv_obj_set_style_bg_color(scenario->object, lv_color_hex(alternate ? 0xF0C98C : 0x7B6375), 0);
++}
++
++static bool render_sample(const probe_scenario_t *scenario, bool alternate, probe_run_stats_t *stats)
++{
++    const int64_t render_start_us = esp_timer_get_time();
++    if (!ui_runtime_lock(1000)) {
++        ESP_LOGE(PROBE_TAG, "failed scenario=%s reason=lvgl_lock_timeout sample=%u", scenario->name,
++                 stats->completed_samples);
++        return false;
++    }
++    apply_update(scenario, alternate);
++    lv_refr_now(NULL);
++    ui_runtime_unlock();
++    const uint32_t render_us = (uint32_t)(esp_timer_get_time() - render_start_us);
++    stats->render_total_us += render_us;
++    if (render_us > stats->render_max_us) {
++        stats->render_max_us = render_us;
++    }
++    stats->completed_samples++;
++    return true;
++}
++
++static bool run_static_scenario(void)
++{
++    const char *name = "static_idle_10s";
++    if (!prepare_measurement(name)) {
++        return false;
++    }
++    const int64_t start_us = esp_timer_get_time();
++    vTaskDelay(pdMS_TO_TICKS(10000));
++    const int64_t elapsed_error_us = esp_timer_get_time() - start_us - 10000000LL;
++    const uint32_t absolute_error_us = (uint32_t)(elapsed_error_us < 0 ? -elapsed_error_us : elapsed_error_us);
++    if (!finish_measurement(name)) {
++        return false;
++    }
++    log_result(name, 0, 0, 0, 0, absolute_error_us);
++    return true;
++}
++
++static bool run_scenario(const probe_scenario_t *scenario)
++{
++    probe_run_stats_t stats = {0};
++    TickType_t wake_tick = xTaskGetTickCount();
++    int64_t expected_us = esp_timer_get_time();
++    bool alternate = false;
++    if (!prepare_measurement(scenario->name)) {
++        return false;
++    }
++    for (uint16_t sample = 0; sample < scenario->samples; sample++) {
++        if (sample != 0U) {
++            vTaskDelayUntil(&wake_tick, pdMS_TO_TICKS(scenario->period_ms));
++            expected_us += (int64_t)scenario->period_ms * 1000LL;
++            const int64_t jitter_us = esp_timer_get_time() - expected_us;
++            const uint32_t absolute_jitter_us = (uint32_t)(jitter_us < 0 ? -jitter_us : jitter_us);
++            if (absolute_jitter_us > stats.schedule_jitter_max_us) {
++                stats.schedule_jitter_max_us = absolute_jitter_us;
++            }
++        }
++        alternate = !alternate;
++        if (!render_sample(scenario, alternate, &stats)) {
++            return false;
++        }
++    }
++    if (!finish_measurement(scenario->name)) {
++        return false;
++    }
++    log_result(scenario->name, stats.completed_samples, scenario->samples - stats.completed_samples,
++               stats.render_total_us, stats.render_max_us, stats.schedule_jitter_max_us);
++    return stats.completed_samples == scenario->samples;
++}
++
++static bool run_full_screen_once(void)
++{
++    const char *name = "full_screen_once";
++    if (!prepare_measurement(name)) {
++        return false;
++    }
++    const int64_t render_start_us = esp_timer_get_time();
++    if (!ui_runtime_lock(1000)) {
++        ESP_LOGE(PROBE_TAG, "failed scenario=%s reason=lvgl_lock_timeout", name);
++        return false;
++    }
++    lv_obj_set_style_bg_color(s_probe_screen, lv_color_hex(0x302A42), 0);
++    lv_obj_invalidate(s_probe_screen);
++    lv_refr_now(NULL);
++    ui_runtime_unlock();
++    const uint32_t render_us = (uint32_t)(esp_timer_get_time() - render_start_us);
++    if (!finish_measurement(name)) {
++        return false;
++    }
++    log_result(name, 1, 0, render_us, render_us, 0);
++    return true;
++}
++
++static void scan_done_handler(void *argument, esp_event_base_t event_base, int32_t event_id, void *event_data)
++{
++    (void)argument;
++    (void)event_base;
++    (void)event_id;
++    (void)event_data;
++    portENTER_CRITICAL(&s_scan_lock);
++    s_scan_active = false;
++    s_scan_done_events++;
++    portEXIT_CRITICAL(&s_scan_lock);
++}
++
++static bool scan_is_active(void)
++{
++    portENTER_CRITICAL(&s_scan_lock);
++    const bool active = s_scan_active;
++    portEXIT_CRITICAL(&s_scan_lock);
++    return active;
++}
++
++static void set_scan_active(bool active)
++{
++    portENTER_CRITICAL(&s_scan_lock);
++    s_scan_active = active;
++    portEXIT_CRITICAL(&s_scan_lock);
++}
++
++static bool run_network_scenario(const probe_scenario_t *scenario)
++{
++    probe_run_stats_t stats = {0};
++    uint16_t scans_started = 0;
++    bool alternate = false;
++    if (!prepare_measurement(scenario->name)) {
++        return false;
++    }
++    while (stats.completed_samples < NETWORK_SAMPLE_TARGET && scans_started < NETWORK_SCAN_LIMIT) {
++        set_scan_active(true);
++        const esp_err_t scan_result = esp_wifi_scan_start(NULL, false);
++        if (scan_result != ESP_OK) {
++            set_scan_active(false);
++            ESP_LOGE(PROBE_TAG, "failed scenario=%s reason=wifi_scan_start error=%s", scenario->name,
++                     esp_err_to_name(scan_result));
++            return false;
++        }
++        scans_started++;
++        TickType_t wake_tick = xTaskGetTickCount();
++        int64_t expected_us = esp_timer_get_time();
++        bool first_sample = true;
++        while (scan_is_active() && stats.completed_samples < NETWORK_SAMPLE_TARGET) {
++            if (!first_sample) {
++                vTaskDelayUntil(&wake_tick, pdMS_TO_TICKS(scenario->period_ms));
++                expected_us += (int64_t)scenario->period_ms * 1000LL;
++                const int64_t jitter_us = esp_timer_get_time() - expected_us;
++                const uint32_t absolute_jitter_us = (uint32_t)(jitter_us < 0 ? -jitter_us : jitter_us);
++                if (absolute_jitter_us > stats.schedule_jitter_max_us) {
++                    stats.schedule_jitter_max_us = absolute_jitter_us;
++                }
++                if (!scan_is_active()) {
++                    break;
++                }
++            }
++            first_sample = false;
++            alternate = !alternate;
++            if (!render_sample(scenario, alternate, &stats)) {
++                return false;
++            }
++        }
++        while (scan_is_active()) {
++            vTaskDelay(pdMS_TO_TICKS(10));
++        }
++        vTaskDelay(pdMS_TO_TICKS(100));
++    }
++    if (!finish_measurement(scenario->name)) {
++        return false;
++    }
++    ESP_LOGI(PROBE_TAG,
++             "network_activity=wifi_scan start_result=ESP_OK scans_started=%u scan_done_events=%u active_samples=%u",
++             scans_started, s_scan_done_events, stats.completed_samples);
++    log_result(scenario->name, stats.completed_samples, NETWORK_SAMPLE_TARGET - stats.completed_samples,
++               stats.render_total_us, stats.render_max_us, stats.schedule_jitter_max_us);
++    return stats.completed_samples == NETWORK_SAMPLE_TARGET && scans_started > 0U &&
++           s_scan_done_events == scans_started;
++}
++
++static void probe_task(void *argument)
++{
++    (void)argument;
++    vTaskDelay(pdMS_TO_TICKS(5000));
++    ESP_LOGI(PROBE_TAG, "begin resolution=320x240 spi_hz=10000000 dma_lines=40 network_tasks=enabled");
++    if (!create_probe_surface()) {
++        ESP_LOGE(PROBE_TAG, "failed reason=lvgl_lock_timeout phase=create_surface");
++        vTaskDelete(NULL);
++        return;
++    }
++    if (esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_SCAN_DONE, scan_done_handler, NULL) != ESP_OK) {
++        ESP_LOGE(PROBE_TAG, "failed reason=wifi_scan_handler_registration");
++        vTaskDelete(NULL);
++        return;
++    }
++
++    bool success = run_full_screen_once();
++    success = run_static_scenario() && success;
++    const probe_scenario_t scenarios[] = {
++        {.name = "clock_64x24_1hz", .object = s_clock_region, .value_a = "23:59", .value_b = "00:00",
++         .samples = 10, .period_ms = 1000, .update_kind = PROBE_UPDATE_TEXT},
++        {.name = "date_80x12_1hz", .object = s_date_region, .value_a = "09/23", .value_b = "09/24",
++         .samples = 10, .period_ms = 1000, .update_kind = PROBE_UPDATE_TEXT},
++        {.name = "temperature_attribution_96x16_1hz", .object = s_temperature_region, .value_a = "26 C",
++         .value_b = "27 C", .samples = 10, .period_ms = 1000, .update_kind = PROBE_UPDATE_TEXT},
++        {.name = "motion_16x16_2hz", .object = s_motion_region, .samples = 40, .period_ms = 500,
++         .update_kind = PROBE_UPDATE_COLOR},
++    };
++    for (size_t index = 0; index < sizeof(scenarios) / sizeof(scenarios[0]); index++) {
++        success = run_scenario(&scenarios[index]) && success;
++    }
++    const probe_scenario_t network_scenario = {
++        .name = "motion_16x16_2hz_wifi_scan",
++        .object = s_motion_region,
++        .samples = NETWORK_SAMPLE_TARGET,
++        .period_ms = 500,
++        .update_kind = PROBE_UPDATE_COLOR,
++    };
++    success = run_network_scenario(&network_scenario) && success;
++    if (success) {
++        ESP_LOGI(PROBE_TAG, "done scenarios=7");
++    } else {
++        ESP_LOGE(PROBE_TAG, "failed reason=incomplete_scenario");
++    }
++    vTaskDelete(NULL);
++}
++
++esp_err_t ui_perf_probe_start(void)
++{
++    if (xTaskCreate(probe_task, "ui_perf_probe", 4096, NULL, 3, NULL) != pdPASS) {
++        return ESP_ERR_NO_MEM;
++    }
++    return ESP_OK;
++}
+diff --git a/Firmware/main/ui_perf_probe.h b/Firmware/main/ui_perf_probe.h
+new file mode 100644
+index 0000000..50c3360
+--- /dev/null
++++ b/Firmware/main/ui_perf_probe.h
+@@ -0,0 +1,5 @@
++#pragma once
++
++#include "esp_err.h"
++
++esp_err_t ui_perf_probe_start(void);
+diff --git a/Firmware/main/ui_runtime.c b/Firmware/main/ui_runtime.c
+index 15b6e53..7bf94e8 100644
+--- a/Firmware/main/ui_runtime.c
++++ b/Firmware/main/ui_runtime.c
+@@ -44,7 +44,11 @@ static void display_flush(lv_disp_drv_t *display_driver, const lv_area_t *area,
+         lv_disp_flush_ready(display_driver);
+         return;
+     }
++    const uint32_t width = (uint32_t)(area->x2 - area->x1 + 1);
++    const uint32_t height = (uint32_t)(area->y2 - area->y1 + 1);
++    board_display_perf_begin_transfer(width * height);
+     if (esp_lcd_panel_draw_bitmap(panel, area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_map) != ESP_OK) {
++        board_display_perf_cancel_transfer();
+         lv_disp_flush_ready(display_driver);
+     }
+ }
