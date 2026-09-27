@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- THROWAWAY interaction prototype for issue #18. Run from the repository root:
+     python3 -m http.server 8765 --directory Firmware/docs/design/mockups
+     Open http://localhost:8765/ambient-motion-prototype/?variant=static
+     Browser canvas draws the entire scene per change; it is not an LVGL transfer or timing measurement. -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>暖灯小屋 · 局部动效决策原型</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#171c1d;color:#e5ddc9;font:15px/1.6 system-ui,sans-serif}main{max-width:1050px;margin:auto;padding:28px 22px 90px}h1{font-size:26px;font-weight:500;margin:4px 0}h2{font-size:18px;font-weight:500}p{color:#b9bcaf;margin:8px 0}.eyebrow{font:11px monospace;letter-spacing:2px;color:#d8b47b}.layout{display:grid;grid-template-columns:640px 1fr;gap:28px;align-items:start;margin-top:28px}.device{background:#080d10;border:2px solid #4b514c;padding:12px;width:max-content;max-width:100%}canvas{display:block;width:640px;max-width:100%;height:auto;image-rendering:pixelated}.native canvas{width:320px}.controls{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}button,select{background:#29332f;color:#e5ddc9;border:1px solid #788375;padding:8px 12px;font:inherit;cursor:pointer}button[aria-pressed=true]{background:#bd9567;color:#161b18}button:focus-visible,select:focus-visible{outline:2px solid #eed0a0;outline-offset:2px}label{display:block;margin:15px 0;color:#e5ddc9;font-size:13px}select{margin-left:8px}.note{font-size:12px}.state{font:12px/1.6 monospace;white-space:pre-wrap;background:#202826;border:1px solid #465249;padding:12px;color:#bfd1be}.switcher{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;background:#e5ddc9;padding:8px;box-shadow:0 6px 24px #0009;z-index:2}.switcher button{color:#19231d;background:#d3c7ae;border-color:#a89a7d}.switcher button[aria-pressed=true]{background:#93633e;color:white}.meter{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px;color:#b9bcaf}.meter strong{color:#e5ddc9;font-weight:500}@media(max-width:950px){.layout{display:block}.device{margin:auto}.switcher{width:calc(100% - 16px);justify-content:center;flex-wrap:wrap}main{padding-bottom:140px}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">THROWAWAY / ISSUE #18 / 320 × 240</div>
+<h1>暖灯小屋，哪里需要呼吸？</h1>
+<p>同一张 Ambient Card 的三个动效方案。默认不轮播；右上角时间与日期为演示值。浏览器画面用于观感选择，真机时序以独立采集为准。</p>
+<div class="layout"><section><div class="device"><canvas id="scene" width="320" height="240" role="img" aria-label="暖灯小屋，演示时间20:48"></canvas></div><p class="note">屏内为 320×240；放大预览使用最近邻像素。控制条只属于原型，不会上设备。</p><div class="controls"><button id="scale" type="button">查看 1×</button><button id="pause" type="button">暂停预览</button></div></section>
+<section><h2 id="title"></h2><p id="description"></p><div class="meter"><strong>变化区域</strong><span id="regions"></span><strong>原型节奏</strong><span id="rhythm"></span><strong>预计更新</strong><span id="cadence"></span></div>
+<label>持续方式<select id="duration"><option value="intermittent" selected>每 30 秒出现 8 秒</option><option value="continuous">持续低频</option></select></label>
+<p class="note">候选区域控制目标为杯口约 12×16 px、窗外微光约 8×8 px；是否满足取决于最终素材和 LVGL 实测的失效区域。</p><pre class="state" id="state" aria-live="polite"></pre></section></div>
+</main><nav class="switcher" aria-label="动效方案"><button data-variant="static" type="button">① 完全静止</button><button data-variant="steam" type="button">② 杯口热气</button><button data-variant="stagger" type="button">③ 热气＋窗光错峰</button></nav>
+<script type="module">
+import {drawScene} from '../retro-pixel-prototype/scene-warm-room.js';
+const variants={
+ static:{title:'① 完全静止',description:'屋里保持一幅画。只有显示值真正改变时才更新文字。适合作为安静程度的对照。',regions:'无动效区',rhythm:'无',cadence:'0 次/秒'},
+ steam:{title:'② 杯口热气',description:'杯口两条短热气每 2 秒换一次形态；桌面、灯、猫和窗外都静止。',regions:'杯口约 12×16 px',rhythm:'每 2 秒一次变化',cadence:'0.5 次/秒'},
+ stagger:{title:'③ 热气与窗光错峰',description:'热气在偶数秒变化，窗外一格微光在两次热气之间变化；两处不同时跳动。',regions:'杯口约 12×16 px；窗外约 8×8 px',rhythm:'两个区域各每 4 秒变化，错开 2 秒',cadence:'合计 0.5 次/秒'}
+};
+const canvas=document.querySelector('#scene'),ctx=canvas.getContext('2d'),params=new URLSearchParams(location.search);
+let variant=variants[params.get('variant')]?params.get('variant'):'static',duration='intermittent',paused=false,tick=0,elapsed=0;
+ctx.imageSmoothingEnabled=false;
+function scene(frame,glow){drawScene(ctx,frame);if(glow){ctx.fillStyle='#ead3a5';ctx.fillRect(94,54,2,2);ctx.fillRect(96,56,2,2);}ctx.fillStyle='#eddfb3';ctx.font='bold 11px monospace';ctx.fillText('20:48',268,24);ctx.font='8px monospace';ctx.fillText('09.12',277,36);}
+function draw(){const active=!paused&&(duration==='continuous'||elapsed%30<8),steam=active&&((variant==='steam'&&Math.floor(elapsed/2)%2===1)||(variant==='stagger'&&Math.floor(elapsed/4)%2===1)),glow=active&&variant==='stagger'&&Math.floor((elapsed+2)/4)%2===1;scene(steam?2:0,glow);document.querySelector('#state').textContent=JSON.stringify({variant,duration,previewSeconds:elapsed,active,steam,windowGlow:glow,automaticRotation:false,browserDraw:'full canvas; visual only',targetDevice:'dirty rectangles require measurement',touchLatency:'unmeasured'},null,2);}
+function choose(next){variant=next;tick=0;elapsed=0;const url=new URL(location.href);url.searchParams.set('variant',next);history.replaceState(null,'',url);document.querySelector('#title').textContent=variants[next].title;document.querySelector('#description').textContent=variants[next].description;document.querySelector('#regions').textContent=variants[next].regions;document.querySelector('#rhythm').textContent=variants[next].rhythm;document.querySelector('#cadence').textContent=variants[next].cadence;document.querySelectorAll('[data-variant]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.variant===next)));draw();}
+document.querySelectorAll('[data-variant]').forEach(button=>button.onclick=()=>choose(button.dataset.variant));
+document.querySelector('#duration').onchange=event=>{duration=event.target.value;elapsed=0;draw();};
+document.querySelector('#pause').onclick=event=>{paused=!paused;event.target.textContent=paused?'继续预览':'暂停预览';draw();};
+document.querySelector('#scale').onclick=event=>{document.body.classList.toggle('native');event.target.textContent=document.body.classList.contains('native')?'查看 2×':'查看 1×';};
+window.addEventListener('popstate',()=>choose(new URLSearchParams(location.search).get('variant')||'static'));
+setInterval(()=>{if(document.hidden||paused)return;tick++;if(tick%2===0){elapsed++;draw();}},500);
+choose(variant);
+</script></body></html>
