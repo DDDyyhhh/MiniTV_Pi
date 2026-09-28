@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#19 暖灯小屋视觉收敛原型（可丢弃）</title>
+<style>
+  :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #191721; color: #eee7d7; }
+  body { margin: 24px; display: grid; justify-items: center; gap: 14px; }
+  h1 { font-size: 18px; margin: 0; }
+  p { margin: 0; max-width: 650px; line-height: 1.5; color: #c4bcb6; }
+  .frame { width: 640px; height: 480px; position: relative; image-rendering: pixelated; box-shadow: 0 0 0 6px #0d0c12; }
+  .scene { width: 100%; height: 100%; image-rendering: pixelated; }
+  .mask { position: absolute; left: 522px; top: 24px; width: 94px; height: 55px; background: #302a3e; }
+  .hud { position: absolute; inset: 0; font-family: monospace; font-weight: bold; image-rendering: pixelated; }
+  .clock, .date, .weather, .unsynced { position: absolute; white-space: nowrap; }
+  .clock { color: #f4e1ba; font-size: 24px; letter-spacing: -1px; left: 524px; top: 22px; }
+  .date { color: #bdab98; font-size: 12px; left: 568px; top: 51px; }
+  .weather { color: #e6c99f; font-size: 14px; left: 414px; top: 84px; }
+  .source { color: #c7b49c; }
+  .unsynced { color: #b09a91; font-size: 12px; left: 552px; top: 54px; }
+  .variant-b .clock { left: 514px; top: 16px; font-size: 28px; }
+  .variant-b .date { left: 562px; top: 49px; }
+  .variant-b .weather { left: 405px; top: 80px; padding: 3px 5px; background: #282638; border: 1px solid #70677d; }
+  .variant-c .clock { left: 498px; top: 22px; font-size: 26px; }
+  .variant-c .date { left: 568px; top: 55px; }
+  .variant-c .weather { left: 410px; top: 102px; color: #f3d9aa; }
+  .dim { filter: brightness(.55); }
+  .stale .weather { color: #a6998b; }
+  .stale .weather::after { content: ' ◦'; color: #a6998b; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  button { color: #eee7d7; background: #353042; border: 1px solid #74697b; border-radius: 4px; padding: 7px 11px; cursor: pointer; }
+  button[aria-pressed="true"] { background: #806044; border-color: #debb80; }
+  .details { min-height: 45px; }
+</style>
+<h1>#19 暖灯小屋视觉收敛 · 可丢弃浏览器原型</h1>
+<p>原型使用 #14 的 A 候选截图作为构图参考，在其上试排信息层。不是生产像素素材、固件代码或真机性能证据。画面按 320×240 逻辑像素放大 2 倍展示。</p>
+<div id="frame" class="frame">
+  <img class="scene" src="reference-A.png" alt="暖灯小屋参考构图">
+  <div class="mask"></div>
+  <div class="hud">
+    <span id="clock" class="clock">20:48</span>
+    <span id="date" class="date">09.12</span>
+    <span id="weather" class="weather">20° · <span class="source">Open-Meteo</span></span>
+    <span id="unsynced" class="unsynced" hidden>未校时</span>
+  </div>
+</div>
+<div class="toolbar" id="variants"></div>
+<div class="toolbar" id="states"></div>
+<p class="details" id="details"></p>
+<script>
+  const variants = {
+    a: 'A · 轻量字形：右上角安静排版，无底板',
+    b: 'B · 对比底板：来源区域加深色底板',
+    c: 'C · 拉开层级：温度下移，钟点略放大'
+  };
+  const states = {
+    normal: '已校时 / 新鲜温度',
+    stale: '温度过期 3 小时内',
+    absent: '没有可用温度',
+    unsynced: '冷启动未校时',
+    dim: '低亮度环境'
+  };
+  const query = new URLSearchParams(location.search);
+  let variant = variants[query.get('variant')] ? query.get('variant') : 'a';
+  let state = states[query.get('state')] ? query.get('state') : 'normal';
+  function controls(containerId, options, selected, assign) {
+    const box = document.getElementById(containerId);
+    box.replaceChildren();
+    for (const [key, label] of Object.entries(options)) {
+      const button = document.createElement('button');
+      button.textContent = label;
+      button.setAttribute('aria-pressed', String(key === selected));
+      button.onclick = () => { assign(key); render(); };
+      box.append(button);
+    }
+  }
+  function render() {
+    const frame = document.getElementById('frame');
+    frame.className = `frame variant-${variant} ${state === 'dim' ? 'dim' : ''} ${state === 'stale' ? 'stale' : ''}`;
+    document.getElementById('clock').textContent = state === 'unsynced' ? '--:--' : '20:48';
+    document.getElementById('date').hidden = state === 'unsynced';
+    document.getElementById('weather').hidden = state === 'unsynced' || state === 'absent';
+    document.getElementById('unsynced').hidden = state !== 'unsynced';
+    controls('variants', variants, variant, value => variant = value);
+    controls('states', states, state, value => state = value);
+    document.getElementById('details').textContent = `${variants[variant]}。${states[state]}。点击温度及来源的目标触控区应打开 Control Center 的来源详情；这里仅比较静态布局。`;
+    history.replaceState(null, '', `?variant=${variant}&state=${state}`);
+  }
+  render();
+</script>
+</html>
